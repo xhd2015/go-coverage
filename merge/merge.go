@@ -2,23 +2,63 @@ package merge
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/xhd2015/go-coverage/code"
 	"github.com/xhd2015/go-coverage/cover"
 	diff "github.com/xhd2015/go-coverage/diff/myers"
+	"github.com/xhd2015/go-coverage/git"
 	"github.com/xhd2015/go-coverage/profile"
 )
 
+func MergeGit(old *profile.Profile, new *profile.Profile, modPrefix string, dir string, oldCommit string, newCommit string) (*profile.Profile, error) {
+	newToOld, err := git.FindUpdateAndRenames(dir, oldCommit, newCommit)
+	if err != nil {
+		return nil, err
+	}
+
+	oldGit := git.NewSnapshot(dir, oldCommit)
+	newGit := git.NewSnapshot(dir, newCommit)
+	getOldFile := func(newFile string) string {
+		file := strings.TrimPrefix(newFile, modPrefix)
+		file = strings.TrimPrefix(file, "/")
+		file = strings.TrimPrefix(file, ".")
+		return newToOld[file]
+	}
+
+	return Merge(old, oldGit.GetContent, new, newGit.GetContent, MergeOptions{
+		GetOldFile: getOldFile,
+	})
+}
+
+type MergeOptions struct {
+	GetOldFile func(newFile string) string
+}
+
 // Merge merge 2 profiles with their code diffs
-func Merge(old *profile.Profile, oldCodeGetter func(f string) (string, error), new *profile.Profile, newCodeGetter func(f string) (string, error)) (*profile.Profile, error) {
+func Merge(old *profile.Profile, oldCodeGetter func(f string) (string, error), new *profile.Profile, newCodeGetter func(f string) (string, error), opts MergeOptions) (*profile.Profile, error) {
 	oldCouners := old.Counters()
 	newCounters := new.Counters()
 
 	mergedCounters := make(map[string][]int, len(newCounters))
 	for file, newCounter := range newCounters {
-		oldCounter, ok := oldCouners[file]
+		var oldMustExist bool
+		oldFile := file
+		if opts.GetOldFile != nil {
+			oldFile = opts.GetOldFile(file)
+			if oldFile == "" {
+				mergedCounters[file] = newCounter
+				continue
+			}
+			oldMustExist = true
+		}
+
+		oldCounter, ok := oldCouners[oldFile]
 		if !ok {
-			// TODO: detect file rename
+			if oldMustExist {
+				return nil, fmt.Errorf("counters not found for old file %s", oldFile)
+			}
+			mergedCounters[file] = newCounter
 			continue
 		}
 		oldCode, err := oldCodeGetter(file)

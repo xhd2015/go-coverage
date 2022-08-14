@@ -62,12 +62,6 @@ func testMergeProfile(t *testing.T, oldFn string, oldSrcFile string, newFn strin
 	if err != nil {
 		t.Fatal(err)
 	}
-	// change old file to new file
-	for _, block := range oldProfile.Blocks {
-		if strings.HasSuffix(block.FileName, oldSrcFile) {
-			block.FileName = block.FileName[:len(block.FileName)-len(oldSrcFile)] + newSrcFile
-		}
-	}
 
 	newProfile, err := profile.ParseProfileFile(newCover)
 	if err != nil {
@@ -89,7 +83,15 @@ func testMergeProfile(t *testing.T, oldFn string, oldSrcFile string, newFn strin
 		return readString(newSrcFile)
 	}
 
-	mergedProfile, err := Merge(oldProfile, oldCodeGetter, newProfile, newCodeGetter)
+	mergedProfile, err := Merge(oldProfile, oldCodeGetter, newProfile, newCodeGetter, MergeOptions{
+		GetOldFile: func(newFile string) string {
+			// map new file to old file
+			if strings.HasSuffix(newFile, newSrcFile) {
+				return newFile[:len(newFile)-len(newSrcFile)] + oldSrcFile
+			}
+			return ""
+		},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
