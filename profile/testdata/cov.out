@@ -1,0 +1,8 @@
+mode: set
+github.com/example/cov/utils/err_util.go:11.48,11.381 4 0
+github.com/example/cov/utils/err_util.go:11.427,12.14 1 0
+github.com/example/cov/utils/err_util.go:15.2,15.23 1 0
+github.com/example/cov/utils/err_util.go:12.14,14.3 1 0
+github.com/example/cov/utils/err_util.go:16.13,17.11 1 0
+github.com/example/cov/utils/err_util.go:18.10,19.36 1 0
+github.com/example/cov/utils/err_util.go:23.29,23.345 3 0

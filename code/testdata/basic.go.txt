@@ -1,0 +1,69 @@
+package what
+
+import (
+    "fmt"
+    "os"
+    os2 "os"
+    "fmt2"
+)
+
+func OK() bool {
+    return false
+}
+
+type X int
+type X2 = X
+type T struct {
+    X
+    Z int `json:"what a hell"`
+}
+
+func (t *T) Get() int {
+    return X
+}
+
+func ellipsis(x int,y...string)   bool /*ha?*/ {
+    return false
+}
+
+func main(){
+    a := 10
+    b := a*10
+    a, b = 20,30*a
+    if a > 10 && (b>20) {
+        var m map[string]string
+        go func(){
+            m["go"]="done"
+        }()
+    }else if b>a {
+        for i:=0;i<20;i++{
+            switch i*a*b {
+                case 0:
+                    panic("case 0")
+                default:
+                    panic("aha")
+            }
+            var t chan int
+            select {
+                case <-t: // do nothing
+            }
+        }
+    }
+    defer func(){
+        os.Exit(1)
+    }()
+    ellipsis(10,"2","3")
+    ellipsis(10,[]string{"2","3"}...)
+    var list []string
+    _ = list[0]
+    _ = list[:]
+    _ = list[0:1]
+    _ = list[0:1:2]
+    // list[0:1:] // error: 3rd index required in 3-index slice
+    // list[::] // error: 2nd index required in 3-index slice
+    fmt.Printf("hello %s\n",getWord())
+}
+
+func getWord() string {
+    return "man"
+}
