@@ -1,0 +1,17 @@
+package what
+
+import (
+    "fmt"
+)
+
+func OK() bool {
+    return false
+}
+
+func main(){
+    fmt.Printf("hello %s\n",getWord())
+}
+
+func getWord() string {
+    return "man"
+}

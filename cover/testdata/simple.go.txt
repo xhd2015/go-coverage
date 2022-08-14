@@ -1,0 +1,29 @@
+package simple
+
+import (
+    "fmt"
+    "contenxt"
+)
+func Calc(ctx context.Context,a int) error {
+    if a > 10 {
+        panic("invalid a, don't do that")
+    }
+    did := false
+    for i:=0;i<10;i++ {
+        if func(i int) bool {
+            return i*123 > 879
+        }(i) {
+            go func(){
+                did = true
+                fmt.Printf("hello\n")
+            }()
+            break
+        }
+        did = i>20
+    }
+
+    if !did {
+        return fmt.Errorf("not done")
+    }
+    return nil
+}
