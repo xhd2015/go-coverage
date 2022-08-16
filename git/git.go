@@ -77,7 +77,7 @@ func (c *GitRepo) FindRenames(oldCommit string, newCommit string) (map[string]st
 	// --- a/test/stubv2/boot/boot.go
 	// +++ b/test/stub/boot/boot.go
 	// @@ -4,8 +4,10 @@ import (
-	cmd := fmt.Sprintf(`git -C %s diff --find-renames --diff-filter=R %s %s|grep -A 3 '^diff --git a/'|grep rename`, sh.Quote(c.Dir), sh.Quote(getRef(oldCommit)), sh.Quote(getRef(newCommit)))
+	cmd := fmt.Sprintf(`git -C %s diff --find-renames --diff-filter=R %s %s|grep -A 3 '^diff --git a/'|grep rename || true`, sh.Quote(c.Dir), sh.Quote(getRef(oldCommit)), sh.Quote(getRef(newCommit)))
 	stdout, _, err := sh.RunBashCmdOpts(cmd, sh.RunBashOptions{
 		// Verbose:    true,
 		NeedStdOut: true,
@@ -115,6 +115,8 @@ func (c *GitSnapshot) GetContent(file string) (string, error) {
 	if normFile == "" {
 		return "", fmt.Errorf("invalid file:%v", file)
 	}
+
+	c.ensureInitList()
 	if !c.fileMap[normFile] {
 		return "", fmt.Errorf("not a file, maybe a dir:%v", file)
 	}
@@ -127,6 +129,10 @@ func (c *GitSnapshot) GetContent(file string) (string, error) {
 	return content, err
 }
 func (c *GitSnapshot) ListFiles() ([]string, error) {
+	c.ensureInitList()
+	return c.files, c.filesErr
+}
+func (c *GitSnapshot) ensureInitList() {
 	c.filesInit.Do(func() {
 		stdout, _, err := sh.RunBashWithOpts([]string{
 			fmt.Sprintf("git -C %s ls-files --with-tree %s", sh.Quote(c.Dir), sh.Quote(c.ref())),
@@ -144,7 +150,6 @@ func (c *GitSnapshot) ListFiles() ([]string, error) {
 			c.fileMap[e] = true
 		}
 	})
-	return c.files, c.filesErr
 }
 
 func (c *GitSnapshot) ref() string {

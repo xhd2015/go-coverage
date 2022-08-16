@@ -12,6 +12,13 @@ import (
 )
 
 func MergeGit(old *profile.Profile, new *profile.Profile, modPrefix string, dir string, oldCommit string, newCommit string) (*profile.Profile, error) {
+	if modPrefix == "" {
+		return nil, fmt.Errorf("must provide modPrefix")
+	}
+	if strings.HasPrefix(modPrefix, "/") || strings.HasSuffix(modPrefix, "/") {
+		return nil, fmt.Errorf("modPrefix must not start or end with '/':%s", modPrefix)
+
+	}
 	newToOld, err := git.FindUpdateAndRenames(dir, oldCommit, newCommit)
 	if err != nil {
 		return nil, err
@@ -23,10 +30,21 @@ func MergeGit(old *profile.Profile, new *profile.Profile, modPrefix string, dir 
 		file := strings.TrimPrefix(newFile, modPrefix)
 		file = strings.TrimPrefix(file, "/")
 		file = strings.TrimPrefix(file, ".")
-		return newToOld[file]
+		oldFile := newToOld[file]
+		if oldFile == "" {
+			return ""
+		}
+		return modPrefix + "/" + oldFile
 	}
 
-	return Merge(old, oldGit.GetContent, new, newGit.GetContent, MergeOptions{
+	getOldContent := func(file string) (string, error) {
+		return oldGit.GetContent(strings.TrimPrefix(file, modPrefix+"/"))
+	}
+	getNewContent := func(file string) (string, error) {
+		return newGit.GetContent(strings.TrimPrefix(file, modPrefix+"/"))
+	}
+
+	return Merge(old, getOldContent, new, getNewContent, MergeOptions{
 		GetOldFile: getOldFile,
 	})
 }
