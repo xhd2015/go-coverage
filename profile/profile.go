@@ -84,17 +84,21 @@ func (c *Profile) Clone() *Profile {
 
 func (c *Profile) String() string {
 	var buf strings.Builder
-	c.Format(&buf)
+	c.Format(&buf, false)
 	return buf.String()
 }
 
-func (c *Profile) Format(w io.Writer) error {
+func (c *Profile) Format(w io.Writer, normalize bool) error {
 	_, err := fmt.Fprintf(w, "mode: %s\n", c.Mode)
 	if err != nil {
 		return err
 	}
 	for _, block := range c.Blocks {
-		_, err := fmt.Fprintln(w, block.String())
+		count := block.Count
+		if normalize && c.Mode == ModeSet && count > 1 {
+			count = 1
+		}
+		_, err := fmt.Fprintln(w, block.FormatWithCount(count))
 		if err != nil {
 			return err
 		}
@@ -102,12 +106,18 @@ func (c *Profile) Format(w io.Writer) error {
 	return nil
 }
 func (c *Profile) Write(file string) error {
+	return c.write(file, false)
+}
+func (c *Profile) WriteNormalized(file string) error {
+	return c.write(file, true)
+}
+func (c *Profile) write(file string, normalize bool) error {
 	f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0777)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	return c.Format(f)
+	return c.Format(f, normalize)
 }
 
 func (c *Profile) Counters() map[string][]int {
@@ -141,7 +151,9 @@ func (c *Profile) ResetCounters(counters map[string][]int) {
 			panic(fmt.Errorf("invalid counters %s,expect:%d , given:%d files", file, idx, len(c)))
 		}
 	}
+}
 
+func (c *Profile) Normalize() {
 	// change to 1
 	if c.Mode == ModeSet {
 		for _, block := range c.Blocks {

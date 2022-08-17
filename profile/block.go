@@ -78,7 +78,10 @@ func (c *Block) String() string {
 }
 
 func (c *CoverageBlock) String() string {
-	return fmt.Sprintf("%s:%s %d %d", c.FileName, c.Block.String(), c.NumStmts, c.Count)
+	return c.FormatWithCount(c.Count)
+}
+func (c *CoverageBlock) FormatWithCount(count int) string {
+	return fmt.Sprintf("%s:%s %d %d", c.FileName, c.Block.String(), c.NumStmts, count)
 }
 
 func (c *Block) Compare(b *Block) int {
