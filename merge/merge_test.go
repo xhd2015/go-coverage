@@ -84,7 +84,7 @@ func testMergeProfile(t *testing.T, oldFn string, oldSrcFile string, newFn strin
 	}
 
 	mergedProfile, err := Merge(oldProfile, oldCodeGetter, newProfile, newCodeGetter, MergeOptions{
-		GetOldFile: func(newFile string) string {
+		GetUpdatedFile: func(newFile string) string {
 			// map new file to old file
 			if strings.HasSuffix(newFile, newSrcFile) {
 				return newFile[:len(newFile)-len(newSrcFile)] + oldSrcFile

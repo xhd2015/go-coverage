@@ -26,7 +26,7 @@ func MergeGit(old *profile.Profile, new *profile.Profile, modPrefix string, dir 
 
 	oldGit := git.NewSnapshot(dir, oldCommit)
 	newGit := git.NewSnapshot(dir, newCommit)
-	getOldFile := func(newFile string) string {
+	getUpdatedFile := func(newFile string) string {
 		file := strings.TrimPrefix(newFile, modPrefix)
 		file = strings.TrimPrefix(file, "/")
 		file = strings.TrimPrefix(file, ".")
@@ -45,12 +45,13 @@ func MergeGit(old *profile.Profile, new *profile.Profile, modPrefix string, dir 
 	}
 
 	return Merge(old, getOldContent, new, getNewContent, MergeOptions{
-		GetOldFile: getOldFile,
+		GetUpdatedFile: getUpdatedFile,
 	})
 }
 
 type MergeOptions struct {
-	GetOldFile func(newFile string) string
+	// GetUpdatedFile only return file that have changed
+	GetUpdatedFile func(newFile string) string
 }
 
 // Merge merge 2 profiles with their code diffs
@@ -62,10 +63,23 @@ func Merge(old *profile.Profile, oldCodeGetter func(f string) (string, error), n
 	for file, newCounter := range newCounters {
 		var oldMustExist bool
 		oldFile := file
-		if opts.GetOldFile != nil {
-			oldFile = opts.GetOldFile(file)
+		if opts.GetUpdatedFile != nil {
+			oldFile = opts.GetUpdatedFile(file)
 			if oldFile == "" {
-				mergedCounters[file] = newCounter
+				oldCounter, ok := oldCouners[file]
+				if !ok {
+					mergedCounters[file] = newCounter
+				} else {
+					if len(newCounter) != len(oldCounter) {
+						return nil, fmt.Errorf("unchanged file found different lenght of counters: file=%s, old=%d, new=%d", file, len(oldCounter), len(newCounter))
+					}
+					// plain merge
+					addedCounters := make([]int, len(newCounter))
+					for i := 0; i < len(newCounter); i++ {
+						addedCounters[i] = newCounter[i] + oldCounter[i]
+					}
+					mergedCounters[file] = addedCounters
+				}
 				continue
 			}
 			oldMustExist = true
