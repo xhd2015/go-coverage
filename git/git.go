@@ -77,11 +77,14 @@ func (c *GitRepo) FindRenames(oldCommit string, newCommit string) (map[string]st
 	// --- a/test/stubv2/boot/boot.go
 	// +++ b/test/stub/boot/boot.go
 	// @@ -4,8 +4,10 @@ import (
-	cmd := fmt.Sprintf(`git -C %s diff --find-renames --diff-filter=R %s %s|grep -A 3 '^diff --git a/'|grep rename || true`, sh.Quote(c.Dir), sh.Quote(getRef(oldCommit)), sh.Quote(getRef(newCommit)))
-	stdout, _, err := sh.RunBashCmdOpts(cmd, sh.RunBashOptions{
+	cmd := fmt.Sprintf(`git -C %s diff --find-renames --diff-filter=R %s %s|grep -A 3 '^diff --git a/'|grep -E '^rename' || true`, sh.Quote(c.Dir), sh.Quote(getRef(oldCommit)), sh.Quote(getRef(newCommit)))
+	stdout, stderr, err := sh.RunBashCmdOpts(cmd, sh.RunBashOptions{
 		// Verbose:    true,
 		NeedStdOut: true,
+		// NeedStdErr: true,
 	})
+	// fmt.Printf("stderr:%v", stderr)
+	_ = stderr
 	if err != nil {
 		return nil, err
 	}

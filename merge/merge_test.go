@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/xhd2015/go-objpath"
+
 	new "github.com/xhd2015/go-coverage/merge/testdata/new"
 	old "github.com/xhd2015/go-coverage/merge/testdata/old"
 	"github.com/xhd2015/go-coverage/profile"
@@ -107,4 +109,10 @@ func testMergeProfile(t *testing.T, oldFn string, oldSrcFile string, newFn strin
 		return fmt.Sprintf("go tool cover -html=%s", f)
 	}
 	t.Logf("profiles merged, run the followling cmds to see merged profile:\n  %s\n  %s\n  %s", fmtCmd(oldCover), fmtCmd(newCover), fmtCmd(mergedCover))
+}
+
+// go test -run TestGetGoMod -v ./merge
+func TestGetGoMod(t *testing.T) {
+	modPath, err := GetModPath(os.Getenv("TEST_DIR"))
+	objpath.AssertResNoErrT(t, modPath, err, `{"$eq":"github.com/xhd2015/go-coverage"}`)
 }

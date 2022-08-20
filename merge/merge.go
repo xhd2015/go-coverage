@@ -9,16 +9,20 @@ import (
 	diff "github.com/xhd2015/go-coverage/diff/myers"
 	"github.com/xhd2015/go-coverage/git"
 	"github.com/xhd2015/go-coverage/profile"
+	"github.com/xhd2015/go-coverage/sh"
 )
 
 func MergeGit(old *profile.Profile, new *profile.Profile, modPrefix string, dir string, oldCommit string, newCommit string) (*profile.Profile, error) {
-	if modPrefix == "" {
-		return nil, fmt.Errorf("must provide modPrefix")
-	}
-	if strings.HasPrefix(modPrefix, "/") || strings.HasSuffix(modPrefix, "/") {
+	if modPrefix == "" || modPrefix == "auto" {
+		var err error
+		modPrefix, err = GetModPath(dir)
+		if err != nil {
+			return nil, err
+		}
+	} else if strings.HasPrefix(modPrefix, "/") || strings.HasSuffix(modPrefix, "/") {
 		return nil, fmt.Errorf("modPrefix must not start or end with '/':%s", modPrefix)
-
 	}
+
 	newToOld, err := git.FindUpdateAndRenames(dir, oldCommit, newCommit)
 	if err != nil {
 		return nil, err
@@ -145,5 +149,23 @@ func MergeFileCounter(oldCounter []int, oldCode string, newCounter []int, newCod
 		}
 		mergedCounters[i] = c
 	}
+	return
+}
+
+func GetModPath(dir string) (modPath string, err error) {
+	// try to read mod from dir
+	var mod struct {
+		Module struct {
+			Path string
+		}
+	}
+	_, _, err = sh.RunBashCmdOpts(fmt.Sprintf(`cd %s && go mod edit -json`, sh.Quote(dir)), sh.RunBashOptions{
+		StdoutToJSON: &mod,
+	})
+	if err != nil {
+		err = fmt.Errorf("get module path: %v", err)
+		return
+	}
+	modPath = mod.Module.Path
 	return
 }

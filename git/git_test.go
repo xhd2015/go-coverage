@@ -22,7 +22,7 @@ func TestFindUpdate(t *testing.T) {
 
 // go test -run TestFindRename -v ./git
 func TestFindRename(t *testing.T) {
-	files, err := FindRenames(dir, "HEAD~10", "HEAD")
+	files, err := FindRenames(dir, "origin/master~50", "origin/master")
 	if err != nil {
 		t.Fatal(err)
 	}
