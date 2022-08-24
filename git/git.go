@@ -21,7 +21,7 @@ func FindUpdate(dir string, oldCommit string, newCommit string) ([]string, error
 	return repo.FindUpdate(oldCommit, newCommit)
 }
 
-func FindUpdateAndRenames(dir string, oldCommit string, newCommit string) (map[string]string, error) {
+func FindUpdateAndRenames(dir string, oldCommit string, newCommit string) (newToOld map[string]string, err error) {
 	repo := &GitRepo{Dir: dir}
 	updates, err := repo.FindUpdate(oldCommit, newCommit)
 	if err != nil {
@@ -38,6 +38,14 @@ func FindUpdateAndRenames(dir string, oldCommit string, newCommit string) (map[s
 		m[u] = u
 	}
 	return m, nil
+}
+func FindAll(dir string, oldCommit string, newCommit string) (allFiles []string, newToOld map[string]string, err error) {
+	newToOld, err = FindUpdateAndRenames(dir, oldCommit, newCommit)
+	if err != nil {
+		return
+	}
+	allFiles, err = NewSnapshot(dir, newCommit).ListFiles()
+	return
 }
 
 type GitRepo struct {

@@ -4,15 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/xhd2015/go-coverage/code"
-	"github.com/xhd2015/go-coverage/cover"
-	diff "github.com/xhd2015/go-coverage/diff/myers"
 	"github.com/xhd2015/go-coverage/git"
-	"github.com/xhd2015/go-coverage/profile"
 	"github.com/xhd2015/go-coverage/sh"
 )
 
-func MergeGit(old *profile.Profile, new *profile.Profile, modPrefix string, dir string, oldCommit string, newCommit string) (*profile.Profile, error) {
+func MergeGit(old Profile, new Profile, modPrefix string, dir string, oldCommit string, newCommit string) (Profile, error) {
 	if modPrefix == "" || modPrefix == "auto" {
 		var err error
 		modPrefix, err = GetModPath(dir)
@@ -23,13 +19,11 @@ func MergeGit(old *profile.Profile, new *profile.Profile, modPrefix string, dir 
 		return nil, fmt.Errorf("modPrefix must not start or end with '/':%s", modPrefix)
 	}
 
-	newToOld, err := git.FindUpdateAndRenames(dir, oldCommit, newCommit)
+	gitDiff := git.NewGitDiff(dir, oldCommit, newCommit)
+	newToOld, err := gitDiff.GetUpdateAndRenames()
 	if err != nil {
 		return nil, err
 	}
-
-	oldGit := git.NewSnapshot(dir, oldCommit)
-	newGit := git.NewSnapshot(dir, newCommit)
 	getUpdatedFile := func(newFile string) string {
 		file := strings.TrimPrefix(newFile, modPrefix)
 		file = strings.TrimPrefix(file, "/")
@@ -42,10 +36,10 @@ func MergeGit(old *profile.Profile, new *profile.Profile, modPrefix string, dir 
 	}
 
 	getOldContent := func(file string) (string, error) {
-		return oldGit.GetContent(strings.TrimPrefix(file, modPrefix+"/"))
+		return gitDiff.GetOldContent(strings.TrimPrefix(file, modPrefix+"/"))
 	}
 	getNewContent := func(file string) (string, error) {
-		return newGit.GetContent(strings.TrimPrefix(file, modPrefix+"/"))
+		return gitDiff.GetNewContent(strings.TrimPrefix(file, modPrefix+"/"))
 	}
 
 	return Merge(old, getOldContent, new, getNewContent, MergeOptions{
@@ -59,95 +53,84 @@ type MergeOptions struct {
 }
 
 // Merge merge 2 profiles with their code diffs
-func Merge(old *profile.Profile, oldCodeGetter func(f string) (string, error), new *profile.Profile, newCodeGetter func(f string) (string, error), opts MergeOptions) (*profile.Profile, error) {
-	oldCouners := old.Counters()
-	newCounters := new.Counters()
-
-	mergedCounters := make(map[string][]int, len(newCounters))
-	for file, newCounter := range newCounters {
+func Merge(old Profile, oldCodeGetter func(f string) (string, error), newProfile Profile, newCodeGetter func(f string) (string, error), opts MergeOptions) (Profile, error) {
+	var err error
+	res := newProfile.Clone()
+	newProfile.RangeCounters(func(pkgFile string, newCounters Counters) bool {
 		var oldMustExist bool
-		oldFile := file
+		oldFile := pkgFile
 		if opts.GetUpdatedFile != nil {
-			oldFile = opts.GetUpdatedFile(file)
+			oldFile = opts.GetUpdatedFile(pkgFile)
 			if oldFile == "" {
-				oldCounter, ok := oldCouners[file]
-				if !ok {
-					mergedCounters[file] = newCounter
+				oldCounters := old.GetCounters(pkgFile)
+				if oldCounters == nil {
+					res.SetCounters(pkgFile, newCounters)
 				} else {
-					if len(newCounter) != len(oldCounter) {
-						return nil, fmt.Errorf("unchanged file found different lenght of counters: file=%s, old=%d, new=%d", file, len(oldCounter), len(newCounter))
+					if newCounters.Len() != oldCounters.Len() {
+						err = fmt.Errorf("unchanged file found different lenght of counters: file=%s, old=%d, new=%d", pkgFile, oldCounters.Len(), newCounters.Len())
+						return false
 					}
 					// plain merge
-					addedCounters := make([]int, len(newCounter))
-					for i := 0; i < len(newCounter); i++ {
-						addedCounters[i] = newCounter[i] + oldCounter[i]
+					addedCounters := newCounters.New(newCounters.Len())
+					for i := 0; i < newCounters.Len(); i++ {
+						addedCounters.Set(i, newCounters.Get(i).Add(oldCounters.Get(i)))
 					}
-					mergedCounters[file] = addedCounters
+					res.SetCounters(pkgFile, addedCounters)
 				}
-				continue
+				return true
 			}
 			oldMustExist = true
 		}
 
-		oldCounter, ok := oldCouners[oldFile]
-		if !ok {
+		oldCounter := old.GetCounters(oldFile)
+		if oldCounter == nil {
 			if oldMustExist {
-				return nil, fmt.Errorf("counters not found for old file %s", oldFile)
+				err = fmt.Errorf("counters not found for old file %s", oldFile)
+				return false
 			}
-			mergedCounters[file] = newCounter
-			continue
+			res.SetCounters(pkgFile, newCounters)
+			return true
 		}
-		oldCode, err := oldCodeGetter(file)
+		var oldCode string
+		var newCode string
+		oldCode, err = oldCodeGetter(pkgFile)
 		if err != nil {
-			return nil, err
+			return false
 		}
-		newCode, err := newCodeGetter(file)
+		newCode, err = newCodeGetter(pkgFile)
 		if err != nil {
-			return nil, err
+			return false
 		}
-		mergedCounter, err := MergeFileCounter(oldCounter, oldCode, newCounter, newCode)
+		var mergedCounter Counters
+		mergedCounter, err = MergeFileNameCounters(oldCounter, oldFile, oldCode, newCounters, pkgFile, newCode)
 		if err != nil {
-			return nil, err
+			return false
 		}
-		mergedCounters[file] = mergedCounter
+		res.SetCounters(pkgFile, mergedCounter)
+		return true
+	})
+	if err != nil {
+		return nil, err
 	}
-
-	res := new.Clone()
-	res.ResetCounters(mergedCounters)
 	return res, nil
 }
 
 // MergeFileCounter merge counters of the same file between two commits,
 // the algorithm takes semantic update into consideration, making the
 // merge more accurate while strict.
-func MergeFileCounter(oldCounter []int, oldCode string, newCounter []int, newCode string) (mergedCounters []int, err error) {
-	oldFset, oldAst, err := code.ParseCodeString("old.go", oldCode)
-	if err != nil {
-		return
-	}
-	newFset, newAst, err := code.ParseCodeString("new.go", newCode)
-	if err != nil {
-		return
-	}
-	oldBlocks := cover.CollectStmts(oldFset, oldAst, []byte(oldCode))
-	if len(oldCounter) != len(oldBlocks) {
-		err = fmt.Errorf("inconsistent old block(%d) and counter(%d)", len(oldBlocks), len(oldCounter))
-		return
-	}
-	newBlocks := cover.CollectStmts(newFset, newAst, []byte(newCode))
-	if len(newCounter) != len(newBlocks) {
-		err = fmt.Errorf("inconsistent new block(%d) and counter(%d)", len(newBlocks), len(newCounter))
-		return
-	}
+func MergeFileCounter(oldCounter Counters, oldCode string, newCounter Counters, newCode string) (mergedCounters Counters, err error) {
+	return MergeFileNameCounters(oldCounter, "old.go", oldCode, newCounter, "new.go", newCode)
+}
 
-	newToOld := diff.ComputeBlockMapping(oldBlocks, newBlocks)
-	mergedCounters = append([]int(nil), newCounter...)
-
-	for i, c := range newCounter {
+func MergeFileNameCounters(oldCounter Counters, oldFileName string, oldCode string, newCounter Counters, newFileName string, newCode string) (mergedCounters Counters, err error) {
+	newToOld, err := ComputeFileBlockMapping(oldFileName, oldCode, newFileName, newCode)
+	mergedCounters = newCounter.New(newCounter.Len())
+	for i := 0; i < newCounter.Len(); i++ {
+		c := newCounter.Get(i)
 		if oldIdx, ok := newToOld[i]; ok {
-			c += oldCounter[oldIdx]
+			c = c.Add(oldCounter.Get(oldIdx))
 		}
-		mergedCounters[i] = c
+		mergedCounters.Set(i, c)
 	}
 	return
 }

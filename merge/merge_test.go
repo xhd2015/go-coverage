@@ -85,7 +85,10 @@ func testMergeProfile(t *testing.T, oldFn string, oldSrcFile string, newFn strin
 		return readString(newSrcFile)
 	}
 
-	mergedProfile, err := Merge(oldProfile, oldCodeGetter, newProfile, newCodeGetter, MergeOptions{
+	oldStdProfile := NewStdProfile(oldProfile)
+	newStdProfile := NewStdProfile(newProfile)
+
+	mergedRes, err := Merge(oldStdProfile, oldCodeGetter, newStdProfile, newCodeGetter, MergeOptions{
 		GetUpdatedFile: func(newFile string) string {
 			// map new file to old file
 			if strings.HasSuffix(newFile, newSrcFile) {
@@ -97,6 +100,7 @@ func testMergeProfile(t *testing.T, oldFn string, oldSrcFile string, newFn strin
 	if err != nil {
 		t.Fatal(err)
 	}
+	mergedProfile := mergedRes.(*StdProfile).Output()
 
 	err = mergedProfile.Write(mergedCover)
 	if err != nil {
