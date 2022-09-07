@@ -17,6 +17,22 @@ type Block struct {
 	numStmt   int
 }
 
+// --- added for access  ---
+
+func NewBlock(pos token.Pos, end token.Pos, numStmt int) *Block {
+	return &Block{startByte: pos, endByte: end, numStmt: numStmt}
+}
+
+func (c *Block) Pos() token.Pos {
+	return c.startByte
+}
+func (c *Block) End() token.Pos {
+	return c.endByte
+}
+func (c *Block) NumStmt() int {
+	return c.numStmt
+}
+
 type Callback interface {
 	OnWrapElse(lbrace int, rbrace int)
 	OnBlock(insertPos token.Pos, pos token.Pos, end token.Pos, numStmts int, basicStmts []ast.Stmt)
