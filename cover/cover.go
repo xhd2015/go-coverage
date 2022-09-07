@@ -31,6 +31,14 @@ type File struct {
 	callback Callback
 }
 
+func NewFile(fset *token.FileSet, content []byte, callback Callback) *File {
+	return &File{
+		fset:     fset,
+		content:  content,
+		callback: callback,
+	}
+}
+
 // findText finds text in the original source, starting at pos.
 // It correctly skips over comments and assumes it need not
 // handle quoted strings.

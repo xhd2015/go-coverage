@@ -34,6 +34,8 @@ func Clean(n ast.Node, opts CleanOpts) string {
 	Fclean(&b, n, opts)
 	return b.String()
 }
+
+// `last` is used to help to decide whether adding the joint symbol or not.
 func CleanList(lister func(func(n ast.Node, last bool)), join string, opts CleanOpts) string {
 	var b strings.Builder
 	FcleanList(&b, lister, join, opts)
@@ -308,6 +310,7 @@ func (c *formatter) cleanCode(n ast.Node) {
 		c.add("[")
 		c.cleanCode(n.Index)
 		c.add("]")
+
 	case *ast.CommClause, *ast.Comment, *ast.CommentGroup:
 		// ignore any comment
 		// return ""
