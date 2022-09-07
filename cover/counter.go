@@ -14,7 +14,7 @@ type Counter struct {
 	VarName     string
 	Fset        *token.FileSet
 	Edit        Edit
-	Blocks      []Block
+	Blocks      []*Block
 	CounterStmt func(string) string
 }
 
@@ -34,7 +34,7 @@ func (c *Counter) OnBlock(insertPos token.Pos, pos token.Pos, end token.Pos, num
 // newCounter creates a new counter expression of the appropriate form.
 func (c *Counter) newCounter(start, end token.Pos, numStmt int) string {
 	stmt := c.CounterStmt(fmt.Sprintf("%s.Count[%d]", c.VarName, len(c.Blocks)))
-	c.Blocks = append(c.Blocks, Block{start, end, numStmt})
+	c.Blocks = append(c.Blocks, NewBlock(start, end, numStmt))
 	return stmt
 }
 
