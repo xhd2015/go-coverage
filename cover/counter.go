@@ -6,6 +6,11 @@ import (
 	"go/token"
 )
 
+type BlockExt struct {
+	*Block
+	InsertPos token.Pos
+}
+
 type Edit interface {
 	Insert(pos int, content string)
 }
@@ -14,7 +19,7 @@ type Counter struct {
 	VarName     string
 	Fset        *token.FileSet
 	Edit        Edit
-	Blocks      []*Block
+	Blocks      []*BlockExt
 	CounterStmt func(string) string
 }
 
@@ -29,12 +34,15 @@ func (c *Counter) OnWrapElse(lbrace int, rbrace int) {
 // OnBlock implements Callback
 func (c *Counter) OnBlock(insertPos token.Pos, pos token.Pos, end token.Pos, numStmts int, basicStmts []ast.Stmt) {
 	c.Edit.Insert(c.offset(insertPos), c.newCounter(pos, end, numStmts)+";")
+	c.Blocks = append(c.Blocks, &BlockExt{
+		Block:     NewBlock(pos, end, numStmts),
+		InsertPos: insertPos,
+	})
 }
 
 // newCounter creates a new counter expression of the appropriate form.
 func (c *Counter) newCounter(start, end token.Pos, numStmt int) string {
 	stmt := c.CounterStmt(fmt.Sprintf("%s.Count[%d]", c.VarName, len(c.Blocks)))
-	c.Blocks = append(c.Blocks, NewBlock(start, end, numStmt))
 	return stmt
 }
 
