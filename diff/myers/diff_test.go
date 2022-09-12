@@ -49,6 +49,7 @@ func TestFileA(t *testing.T) {
 	t.Logf("ops:%+v", jsonstr(ops))
 }
 
+// go test -run TestBlockMapping -v ./diff/myers
 func TestBlockMapping(t *testing.T) {
 	m := ComputeBlockMapping(
 		readLines("testdata/a_old.txt"),

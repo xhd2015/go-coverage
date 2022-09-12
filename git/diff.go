@@ -24,6 +24,23 @@ type GitDiff struct {
 	updateOnce  sync.Once
 	updateFiles []string // file list
 	updateErr   error
+
+	fileDetailsOnce sync.Once
+	fileDetails     map[string]*FileDetail
+	fileDetailsErr  error
+}
+
+type ChangeType string
+
+const (
+	ChangeTypeUnchanged ChangeType = "unchanged"
+	ChangeTypeUpdated   ChangeType = "updated"
+	ChangeTypeAdded     ChangeType = "added"
+)
+
+type FileDetail struct {
+	RenamedFrom    string `json:",omitempty"` // empty if not renamed
+	ContentChanged bool   `json:",omitempty"` // content change type
 }
 
 func NewGitDiff(dir string, oldCommit string, newCommit string) *GitDiff {
@@ -39,6 +56,40 @@ func NewGitDiff(dir string, oldCommit string, newCommit string) *GitDiff {
 func (c *GitDiff) AllFiles() ([]string, error) {
 	return c.newGit.ListFiles()
 }
+func (c *GitDiff) AllFilesDetails() (map[string]*FileDetail, error) {
+	c.fileDetailsOnce.Do(func() {
+		allFiles, err := c.AllFiles()
+		if err != nil {
+			c.fileDetailsErr = fmt.Errorf("get all files err:%v", err)
+			return
+		}
+		renames, err := c.GetRenames()
+		if err != nil {
+			c.fileDetailsErr = fmt.Errorf("get rename files err:%v", err)
+			return
+		}
+		updates, err := c.GetUpdates()
+		if err != nil {
+			c.fileDetailsErr = fmt.Errorf("get updates err:%v", err)
+			return
+		}
+		updateMap := make(map[string]bool, len(updates))
+		for _, file := range updates {
+			updateMap[file] = true
+		}
+
+		fileDetailsMap := make(map[string]*FileDetail, len(allFiles))
+		for _, file := range allFiles {
+			fileDetailsMap[file] = &FileDetail{
+				RenamedFrom:    renames[file],
+				ContentChanged: updateMap[file],
+			}
+		}
+		c.fileDetails = fileDetailsMap
+	})
+	return c.fileDetails, c.fileDetailsErr
+}
+
 func (c *GitDiff) GetUpdateAndRenames() (newToOld map[string]string, err error) {
 	c.mergeOnce.Do(func() {
 		renames, err := c.GetRenames()

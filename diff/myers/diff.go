@@ -25,9 +25,11 @@ type operation struct {
 // operations returns the list of operations to convert a into b, consolidating
 // operations for multiple lines and not including equal lines.
 func operations(a, b []string) []*operation {
-	return operationsComplex(a, b, nil)
+	return operationsComplex(a, b, nil, nil)
 }
-func operationsComplex(a, b []string, onSame func(x, y int)) []*operation {
+
+// for `onUpdate`, if newLineEnd - newLineStart = 0, then it is a deletion. Otherwise an update
+func operationsComplex(a, b []string, onSame func(oldLine, newLine int), onUpdate func(oldLineStart, oldLineEnd, newLineStart, newLineEnd int)) []*operation {
 	if len(a) == 0 && len(b) == 0 {
 		return nil
 	}
@@ -51,11 +53,14 @@ func operationsComplex(a, b []string, onSame func(x, y int)) []*operation {
 		solution[i] = op
 		i++
 	}
+	// x: line track of old content
+	// y: line track of new content
 	x, y := 0, 0
 	for _, snake := range snakes {
 		if len(snake) < 2 {
 			continue
 		}
+		oldLineStart := x
 		var op *operation
 		// delete (horizontal)
 		for snake[0]-snake[1] > x-y {
@@ -71,8 +76,11 @@ func operationsComplex(a, b []string, onSame func(x, y int)) []*operation {
 				break
 			}
 		}
+		oldLineEnd := x
 		add(op, x, y)
 		op = nil
+
+		newLineStart := y
 		// insert (vertical)
 		for snake[0]-snake[1] < x-y {
 			if op == nil {
@@ -84,7 +92,14 @@ func operationsComplex(a, b []string, onSame func(x, y int)) []*operation {
 			}
 			y++
 		}
+
+		newLineEnd := y
 		add(op, x, y)
+
+		if onUpdate != nil {
+			onUpdate(oldLineStart, oldLineEnd, newLineStart, newLineEnd)
+		}
+
 		op = nil
 		// equal (diagonal)
 		for x < snake[0] {

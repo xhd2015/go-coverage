@@ -18,7 +18,9 @@ type Counters interface {
 	New(n int) Counters
 }
 
+// a Counter represents a block
 type Counter interface {
+	// Add called when two blocks are the same
 	Add(b Counter) Counter
 }
 type IntCounter int

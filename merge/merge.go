@@ -9,42 +9,49 @@ import (
 )
 
 func MergeGit(old Profile, new Profile, modPrefix string, dir string, oldCommit string, newCommit string) (Profile, error) {
+	_, merged, _, err := MergeGitDiff(old, new, modPrefix, dir, oldCommit, newCommit)
+	return merged, err
+}
+func MergeGitDiff(old Profile, new Profile, modPrefix string, dir string, oldCommit string, newCommit string) (actualModPrefix string, merged Profile, gitDiff *git.GitDiff, err error) {
+	actualModPrefix = modPrefix
 	if modPrefix == "" || modPrefix == "auto" {
-		var err error
-		modPrefix, err = GetModPath(dir)
+		actualModPrefix, err = GetModPath(dir)
 		if err != nil {
-			return nil, err
+			err = fmt.Errorf("get mod path err:%v", err)
+			return
 		}
-	} else if strings.HasPrefix(modPrefix, "/") || strings.HasSuffix(modPrefix, "/") {
-		return nil, fmt.Errorf("modPrefix must not start or end with '/':%s", modPrefix)
+	} else if strings.HasPrefix(actualModPrefix, "/") || strings.HasSuffix(actualModPrefix, "/") {
+		err = fmt.Errorf("modPrefix must not start or end with '/':%s", actualModPrefix)
+		return
 	}
 
-	gitDiff := git.NewGitDiff(dir, oldCommit, newCommit)
+	gitDiff = git.NewGitDiff(dir, oldCommit, newCommit)
 	newToOld, err := gitDiff.GetUpdateAndRenames()
 	if err != nil {
-		return nil, err
+		return
 	}
 	getUpdatedFile := func(newFile string) string {
-		file := strings.TrimPrefix(newFile, modPrefix)
+		file := strings.TrimPrefix(newFile, actualModPrefix)
 		file = strings.TrimPrefix(file, "/")
 		file = strings.TrimPrefix(file, ".")
 		oldFile := newToOld[file]
 		if oldFile == "" {
 			return ""
 		}
-		return modPrefix + "/" + oldFile
+		return actualModPrefix + "/" + oldFile
 	}
 
 	getOldContent := func(file string) (string, error) {
-		return gitDiff.GetOldContent(strings.TrimPrefix(file, modPrefix+"/"))
+		return gitDiff.GetOldContent(strings.TrimPrefix(file, actualModPrefix+"/"))
 	}
 	getNewContent := func(file string) (string, error) {
-		return gitDiff.GetNewContent(strings.TrimPrefix(file, modPrefix+"/"))
+		return gitDiff.GetNewContent(strings.TrimPrefix(file, actualModPrefix+"/"))
 	}
 
-	return Merge(old, getOldContent, new, getNewContent, MergeOptions{
+	merged, err = Merge(old, getOldContent, new, getNewContent, MergeOptions{
 		GetUpdatedFile: getUpdatedFile,
 	})
+	return
 }
 
 type MergeOptions struct {
