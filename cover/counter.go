@@ -50,3 +50,39 @@ func (c *Counter) newCounter(start, end token.Pos, numStmt int) string {
 func (c *Counter) offset(pos token.Pos) int {
 	return c.Fset.Position(pos).Offset
 }
+
+type Callbacks struct {
+	OnBlockFn    func(insertPos token.Pos, pos token.Pos, end token.Pos, numStmts int, basicStmts []ast.Stmt)
+	OnWrapElseFn func(lbrace int, rbrace int)
+}
+
+var _ Callback = (*Callbacks)(nil)
+
+func RangeBlocks(fset *token.FileSet, f *ast.File, content []byte, fn func(insertPos token.Pos, pos token.Pos, end token.Pos, numStmts int, basicStmts []ast.Stmt)) {
+	if fn == nil {
+		panic(fmt.Errorf("requires fn"))
+	}
+	bc := &Callbacks{OnBlockFn: fn}
+	fvisitor := &File{
+		fset:     fset,
+		content:  content,
+		callback: bc,
+	}
+	ast.Walk(fvisitor, f)
+}
+
+// OnBlock implements Callback
+func (c *Callbacks) OnBlock(insertPos token.Pos, pos token.Pos, end token.Pos, numStmts int, basicStmts []ast.Stmt) {
+	if c.OnBlockFn == nil {
+		return
+	}
+	c.OnBlockFn(insertPos, pos, end, numStmts, basicStmts)
+}
+
+// OnWrapElse implements Callback
+func (c *Callbacks) OnWrapElse(lbrace int, rbrace int) {
+	if c.OnWrapElseFn != nil {
+		return
+	}
+	c.OnWrapElseFn(lbrace, rbrace)
+}
