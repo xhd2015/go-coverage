@@ -81,7 +81,7 @@ func (c *Callbacks) OnBlock(insertPos token.Pos, pos token.Pos, end token.Pos, n
 
 // OnWrapElse implements Callback
 func (c *Callbacks) OnWrapElse(lbrace int, rbrace int) {
-	if c.OnWrapElseFn != nil {
+	if c.OnWrapElseFn == nil {
 		return
 	}
 	c.OnWrapElseFn(lbrace, rbrace)
