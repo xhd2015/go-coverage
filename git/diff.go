@@ -25,6 +25,10 @@ type GitDiff struct {
 	updateFiles []string // file list
 	updateErr   error
 
+	addedOnce  sync.Once
+	addedFiles []string // file list
+	addedErr   error
+
 	fileDetailsOnce sync.Once
 	fileDetails     map[string]*FileDetail
 	fileDetailsErr  error
@@ -39,6 +43,7 @@ const (
 )
 
 type FileDetail struct {
+	IsNew          bool   `json:",omitempty"`
 	RenamedFrom    string `json:",omitempty"` // empty if not renamed
 	ContentChanged bool   `json:",omitempty"` // content change type
 }
@@ -73,14 +78,25 @@ func (c *GitDiff) AllFilesDetails() (map[string]*FileDetail, error) {
 			c.fileDetailsErr = fmt.Errorf("get updates err:%v", err)
 			return
 		}
+		added, err := c.GetNew()
+		if err != nil {
+			c.fileDetailsErr = fmt.Errorf("get added err:%v", err)
+			return
+		}
 		updateMap := make(map[string]bool, len(updates))
 		for _, file := range updates {
 			updateMap[file] = true
 		}
 
+		addedMap := make(map[string]bool, len(added))
+		for _, file := range added {
+			addedMap[file] = true
+		}
+
 		fileDetailsMap := make(map[string]*FileDetail, len(allFiles))
 		for _, file := range allFiles {
 			fileDetailsMap[file] = &FileDetail{
+				IsNew:          addedMap[file],
 				RenamedFrom:    renames[file],
 				ContentChanged: updateMap[file],
 			}
@@ -117,6 +133,7 @@ func (c *GitDiff) GetUpdateAndRenames() (newToOld map[string]string, err error) 
 	})
 	return c.newToOld, c.newToOldErr
 }
+
 func (c *GitDiff) GetRenames() (newToOld map[string]string, err error) {
 	c.renameOnce.Do(func() {
 		c.renames, c.renameErr = FindRenames(c.dir, c.oldCommit, c.newCommit)
@@ -135,7 +152,18 @@ func (c *GitDiff) GetUpdates() ([]string, error) {
 	})
 	return c.updateFiles, c.updateErr
 }
-
+func (c *GitDiff) GetNew() ([]string, error) {
+	c.addedOnce.Do(func() {
+		repo := &GitRepo{Dir: c.dir}
+		added, err := repo.FindAdded(c.oldCommit, c.newCommit)
+		if err != nil {
+			c.addedErr = err
+			return
+		}
+		c.addedFiles = added
+	})
+	return c.addedFiles, c.addedErr
+}
 func (c *GitDiff) GetNewContent(newFile string) (string, error) {
 	return c.newGit.GetContent(newFile)
 }

@@ -74,6 +74,16 @@ func (c *GitRepo) FindUpdate(oldCommit string, newCommit string) ([]string, erro
 	}
 	return splitLinesFilterEmpty(stdout), nil
 }
+func (c *GitRepo) FindAdded(oldCommit string, newCommit string) ([]string, error) {
+	cmd := fmt.Sprintf(`git -C %s diff --diff-filter=A --name-only %s %s`, sh.Quote(c.Dir), sh.Quote(getRef(oldCommit)), sh.Quote(getRef(newCommit)))
+	stdout, _, err := sh.RunBashCmdOpts(cmd, sh.RunBashOptions{
+		NeedStdOut: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return splitLinesFilterEmpty(stdout), nil
+}
 func (c *GitRepo) FindRenames(oldCommit string, newCommit string) (map[string]string, error) {
 	// example:
 	// 	$ git diff --find-renames --diff-filter=R   HEAD~10 HEAD

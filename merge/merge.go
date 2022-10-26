@@ -26,19 +26,31 @@ func MergeGitDiff(old Profile, new Profile, modPrefix string, dir string, oldCom
 	}
 
 	gitDiff = git.NewGitDiff(dir, oldCommit, newCommit)
-	newToOld, err := gitDiff.GetUpdateAndRenames()
+
+	fileDetails, err := gitDiff.AllFilesDetails()
 	if err != nil {
 		return
 	}
-	getUpdatedFile := func(newFile string) string {
-		file := strings.TrimPrefix(newFile, actualModPrefix)
-		file = strings.TrimPrefix(file, "/")
-		file = strings.TrimPrefix(file, ".")
-		oldFile := newToOld[file]
-		if oldFile == "" {
-			return ""
+	getFileUpdateDetail := func(pkgFile string) (isNew bool, hasUpdate bool, oldFile string) {
+		// trim modPrefix
+		relativeFile := strings.TrimPrefix(pkgFile, actualModPrefix)
+		relativeFile = strings.TrimPrefix(relativeFile, "/")
+		relativeFile = strings.TrimPrefix(relativeFile, ".")
+		fd := fileDetails[relativeFile]
+		if fd == nil {
+			panic(fmt.Errorf("file not found: %v", relativeFile))
 		}
-		return actualModPrefix + "/" + oldFile
+		isNew = fd.IsNew
+		if isNew {
+			return
+		}
+		oldFile = relativeFile
+		if fd.RenamedFrom != "" {
+			oldFile = fd.RenamedFrom
+		}
+		oldFile = actualModPrefix + "/" + oldFile
+		hasUpdate = fd.ContentChanged
+		return
 	}
 
 	getOldContent := func(file string) (string, error) {
@@ -49,48 +61,56 @@ func MergeGitDiff(old Profile, new Profile, modPrefix string, dir string, oldCom
 	}
 
 	merged, err = Merge(old, getOldContent, new, getNewContent, MergeOptions{
-		GetUpdatedFile: getUpdatedFile,
+		GetFileUpdateDetail: getFileUpdateDetail,
 	})
 	return
 }
 
 type MergeOptions struct {
-	// GetUpdatedFile only return file that have changed
-	GetUpdatedFile func(newFile string) string
+	// GetFileUpdateDetail only return file that have changed
+	// GetFileUpdateDetail() returns files that have content updates,including: content changed files, new files.
+	// if isNew == true, then the given file is completely new
+	// otherwise, if oldFile == "", then the file is not updated, which means all blocks should be merged
+	//
+	GetFileUpdateDetail func(newFile string) (isNew bool, hasUpdate bool, oldFile string)
 }
 
 // Merge merge 2 profiles with their code diffs
+// for files there are 2 independent conditions:
+//  1.name changed  2.content changed
 func Merge(old Profile, oldCodeGetter func(f string) (string, error), newProfile Profile, newCodeGetter func(f string) (string, error), opts MergeOptions) (Profile, error) {
 	var err error
 	res := newProfile.Clone()
 	newProfile.RangeCounters(func(pkgFile string, newCounters Counters) bool {
-		var oldMustExist bool
-		oldFile := pkgFile
-		if opts.GetUpdatedFile != nil {
-			oldFile = opts.GetUpdatedFile(pkgFile)
-			if oldFile == "" {
-				oldCounters := old.GetCounters(pkgFile)
-				if oldCounters == nil {
-					res.SetCounters(pkgFile, newCounters)
-				} else {
-					if newCounters.Len() != oldCounters.Len() {
-						err = fmt.Errorf("unchanged file found different lenght of counters: file=%s, old=%d, new=%d", pkgFile, oldCounters.Len(), newCounters.Len())
-						return false
-					}
-					// plain merge
-					addedCounters := newCounters.New(newCounters.Len())
-					for i := 0; i < newCounters.Len(); i++ {
-						addedCounters.Set(i, newCounters.Get(i).Add(oldCounters.Get(i)))
-					}
-					res.SetCounters(pkgFile, addedCounters)
-				}
-				return true
+		var oldCounters Counters
+
+		var isNewFile bool
+		var contentUpdated bool
+		var oldFile string
+		isNewFile, contentUpdated, oldFile = opts.GetFileUpdateDetail(pkgFile)
+		if isNewFile {
+			res.SetCounters(pkgFile, newCounters)
+			return true
+		}
+		if !contentUpdated {
+			oldCounters = old.GetCounters(oldFile)
+			if newCounters.Len() != oldCounters.Len() {
+				err = fmt.Errorf("unchanged file found different lenght of counters: file=%s, old=%d, new=%d", pkgFile, oldCounters.Len(), newCounters.Len())
+				return false
 			}
-			oldMustExist = true
+			// plain merge
+			addedCounters := newCounters.New(newCounters.Len())
+			for i := 0; i < newCounters.Len(); i++ {
+				addedCounters.Set(i, newCounters.Get(i).Add(oldCounters.Get(i)))
+			}
+			res.SetCounters(pkgFile, addedCounters)
+			return true
 		}
 
-		oldCounter := old.GetCounters(oldFile)
-		if oldCounter == nil {
+		// file updated, merge unchanged counters
+		var oldMustExist bool // TODO: for debug
+		oldCounters = old.GetCounters(oldFile)
+		if oldCounters == nil {
 			if oldMustExist {
 				err = fmt.Errorf("counters not found for old file %s", oldFile)
 				return false
@@ -109,7 +129,7 @@ func Merge(old Profile, oldCodeGetter func(f string) (string, error), newProfile
 			return false
 		}
 		var mergedCounter Counters
-		mergedCounter, err = MergeFileNameCounters(oldCounter, oldFile, oldCode, newCounters, pkgFile, newCode)
+		mergedCounter, err = MergeFileNameCounters(oldCounters, oldFile, oldCode, newCounters, pkgFile, newCode)
 		if err != nil {
 			return false
 		}

@@ -161,7 +161,9 @@ func (c *formatter) cleanCode(n ast.Node) {
 			c.cleanCode(n.Init)
 		}
 		c.add(";")
-		c.cleanCode(n.Cond)
+		if n.Cond != nil {
+			c.cleanCode(n.Cond)
+		}
 		c.add(";")
 		if n.Post != nil {
 			c.cleanCode(n.Post)
