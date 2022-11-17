@@ -103,7 +103,8 @@ func operationsComplex(a, b []string, onSame func(oldLine, newLine int), onUpdat
 		op = nil
 		// equal (diagonal)
 		for x < snake[0] {
-			if onSame != nil {
+			// NOTE: there are chances where x>=M && y>=N
+			if onSame != nil && x < M && y < N {
 				onSame(x, y)
 			}
 
