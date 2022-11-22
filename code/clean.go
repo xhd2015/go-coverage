@@ -169,6 +169,19 @@ func (c *formatter) cleanCode(n ast.Node) {
 			c.cleanCode(n.Post)
 		}
 		c.cleanCode(n.Body)
+	case *ast.RangeStmt:
+		c.add("for ")
+		if n.Key != nil {
+			c.cleanCode(n.Key)
+			if n.Value != nil {
+				c.add(",")
+				c.cleanCode(n.Value)
+			}
+			c.add(n.Tok.String())
+			c.add("range ")
+		}
+		c.cleanCode(n.X)
+		c.cleanCode(n.Body)
 	case *ast.BranchStmt: // break,goto,continue
 		c.add(n.Tok.String())
 		if n.Label != nil {
@@ -202,6 +215,7 @@ func (c *formatter) cleanCode(n ast.Node) {
 	case *ast.IncDecStmt: // ++, --
 		c.cleanCode(n.X)
 		c.add(n.Tok.String())
+		// expr
 	case *ast.ExprStmt:
 		c.cleanCode(n.X)
 	case *ast.AssignStmt:
@@ -230,7 +244,12 @@ func (c *formatter) cleanCode(n ast.Node) {
 		if n.Elt != nil {
 			c.cleanCode(n.Elt)
 		}
-
+	case *ast.TypeAssertExpr:
+		c.cleanCode(n.X)
+		c.add(".")
+		c.add("(")
+		c.cleanCode(n.Type)
+		c.add(")")
 		// check Type
 	case *ast.FuncType:
 		if n.Func.IsValid() {
@@ -267,6 +286,9 @@ func (c *formatter) cleanCode(n ast.Node) {
 		c.cleanCode(n.Key)
 		c.add("]")
 		c.cleanCode(n.Value)
+	case *ast.InterfaceType:
+		c.add("interface")
+		c.cleanCode(n.Methods)
 	// check Literal
 	case *ast.BasicLit:
 		c.add(n.Value)
