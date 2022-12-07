@@ -201,6 +201,16 @@ func (c *formatter) cleanCode(n ast.Node) {
 	case *ast.SelectStmt:
 		c.add("select ")
 		c.cleanCode(n.Body)
+	case *ast.TypeSwitchStmt:
+		c.add("switch ")
+		if n.Init != nil {
+			c.cleanCode(n.Init)
+			c.add(";")
+		}
+		if n.Assign != nil {
+			c.cleanCode(n.Assign)
+		}
+		c.cleanCode(n.Body)
 	case *ast.CaseClause:
 		if n.List != nil {
 			c.add("case ")
@@ -224,6 +234,10 @@ func (c *formatter) cleanCode(n ast.Node) {
 		c.add(n.Tok.String())
 		c.cleanExprs(n.Rhs, ",")
 		// check Expr
+	case *ast.SendStmt:
+		c.cleanCode(n.Chan)
+		c.add("<-")
+		c.cleanCode(n.Value)
 	case *ast.BinaryExpr:
 		c.cleanCode(n.X)
 		c.add(n.Op.String())
@@ -248,7 +262,11 @@ func (c *formatter) cleanCode(n ast.Node) {
 		c.cleanCode(n.X)
 		c.add(".")
 		c.add("(")
-		c.cleanCode(n.Type)
+		if n.Type != nil {
+			c.cleanCode(n.Type)
+		} else {
+			c.add("type")
+		}
 		c.add(")")
 		// check Type
 	case *ast.FuncType:
@@ -289,6 +307,15 @@ func (c *formatter) cleanCode(n ast.Node) {
 	case *ast.InterfaceType:
 		c.add("interface")
 		c.cleanCode(n.Methods)
+	case *ast.ChanType:
+		if n.Arrow == token.NoPos {
+			c.add("chan ")
+		} else if n.Arrow < n.Begin {
+			c.add("<-chan ")
+		} else {
+			c.add("chan<- ")
+		}
+		c.cleanCode(n.Value)
 	// check Literal
 	case *ast.BasicLit:
 		c.add(n.Value)
