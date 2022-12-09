@@ -9,7 +9,8 @@ import (
 
 // go test -run TestCollectEmptyLines -v ./line
 func TestCollectEmptyLines(t *testing.T) {
-	testCode, err := ioutil.ReadFile("./testdata/line_test.go.txt")
+	// testCode, err := ioutil.ReadFile("./testdata/line_test.go.txt")
+	testCode, err := ioutil.ReadFile("./testdata/x_ignore.go.txt")
 	if err != nil {
 		t.Fatal(err)
 	}

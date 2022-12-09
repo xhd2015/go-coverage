@@ -50,6 +50,8 @@ func BuildArgsToSyntaxArgs(args []string) []string {
 // NOTE: only collect lines between ast.File, which is the only possible semantic area.
 func CollectEmptyLinesForFile(fset *token.FileSet, f *goast.File) []int {
 	maxLine := -1
+
+	//
 	lineHavingNonEmptyNode := make(map[int]bool)
 	goast.Inspect(f, func(n goast.Node) bool {
 		if n == nil {
@@ -74,8 +76,10 @@ func CollectEmptyLinesForFile(fset *token.FileSet, f *goast.File) []int {
 			maxLine = endLine
 		}
 
-		_, isCmt := n.(*goast.Comment)
-		if !isCmt {
+		// check if comment
+		switch n.(type) {
+		case *goast.Comment, *goast.CommentGroup:
+		default:
 			lineHavingNonEmptyNode[line] = true
 			if n.End().IsValid() {
 				lineHavingNonEmptyNode[endLine] = true
