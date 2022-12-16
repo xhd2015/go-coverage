@@ -27,7 +27,7 @@ func MergeGitDiff(old Profile, new Profile, modPrefix string, dir string, oldCom
 
 	gitDiff = git.NewGitDiff(dir, oldCommit, newCommit)
 
-	fileDetails, err := gitDiff.AllFilesDetails()
+	fileDetails, err := gitDiff.AllFilesDetailsV2()
 	if err != nil {
 		return
 	}
@@ -94,8 +94,19 @@ func Merge(old Profile, oldCodeGetter func(f string) (string, error), newProfile
 		}
 		if !contentUpdated {
 			oldCounters = old.GetCounters(oldFile)
-			if newCounters.Len() != oldCounters.Len() {
-				err = fmt.Errorf("unchanged file found different lenght of counters: file=%s, old=%d, new=%d", pkgFile, oldCounters.Len(), newCounters.Len())
+			var oldCountersLen int
+			if oldCounters != nil {
+				oldCountersLen = oldCounters.Len()
+			}
+			if !isNewFile && oldCountersLen == 0 {
+				// if this is not a new file, and its content not updated, and it has zero counters,
+				// then it is the case that `go list -deps ./src` does show the package, that is,
+				// the package is excluded effectively from the build.
+				res.SetCounters(pkgFile, newCounters)
+				return true
+			}
+			if newCounters.Len() != oldCountersLen {
+				err = fmt.Errorf("unchanged file found different lenght of counters: file=%s, old=%d, new=%d", pkgFile, oldCountersLen, newCounters.Len())
 				return false
 			}
 			// plain merge
