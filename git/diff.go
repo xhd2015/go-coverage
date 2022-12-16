@@ -61,6 +61,9 @@ func NewGitDiff(dir string, oldCommit string, newCommit string) *GitDiff {
 func (c *GitDiff) AllFiles() ([]string, error) {
 	return c.newGit.ListFiles()
 }
+
+// AllFilesDetails deprecated, it has bug.
+// use AllFilesDetailsV2 instead
 func (c *GitDiff) AllFilesDetails() (map[string]*FileDetail, error) {
 	c.fileDetailsOnce.Do(func() {
 		allFiles, err := c.AllFiles()
@@ -106,6 +109,53 @@ func (c *GitDiff) AllFilesDetails() (map[string]*FileDetail, error) {
 	return c.fileDetails, c.fileDetailsErr
 }
 
+func (c *GitDiff) AllFilesDetailsV2() (map[string]*FileDetail, error) {
+	c.fileDetailsOnce.Do(func() {
+		allFiles, err := c.AllFiles()
+		if err != nil {
+			c.fileDetailsErr = fmt.Errorf("get all files err:%v", err)
+			return
+		}
+		updates, err := c.GetUpdates()
+		if err != nil {
+			c.fileDetailsErr = fmt.Errorf("get updates err:%v", err)
+			return
+		}
+		added, err := c.GetNew()
+		if err != nil {
+			c.fileDetailsErr = fmt.Errorf("get added err:%v", err)
+			return
+		}
+		updateMap := make(map[string]bool, len(updates))
+		for _, file := range updates {
+			updateMap[file] = true
+		}
+
+		addedMap := make(map[string]bool, len(added))
+		for _, file := range added {
+			addedMap[file] = true
+		}
+
+		fileDetailsMap := make(map[string]*FileDetail, len(allFiles))
+		for _, file := range allFiles {
+			fileDetailsMap[file] = &FileDetail{
+				IsNew:          addedMap[file],
+				ContentChanged: updateMap[file],
+			}
+		}
+		err = FindRenamesV2(c.dir, c.oldCommit, c.newCommit, func(newFile, oldFile, percent string) {
+			d := fileDetailsMap[newFile]
+			d.RenamedFrom = oldFile
+			d.ContentChanged = d.ContentChanged || percent != "100%"
+		})
+		if err != nil {
+			c.fileDetailsErr = fmt.Errorf("get rename files err:%v", err)
+			return
+		}
+		c.fileDetails = fileDetailsMap
+	})
+	return c.fileDetails, c.fileDetailsErr
+}
 func (c *GitDiff) GetUpdateAndRenames() (newToOld map[string]string, err error) {
 	c.mergeOnce.Do(func() {
 		renames, err := c.GetRenames()
