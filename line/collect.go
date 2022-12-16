@@ -30,7 +30,7 @@ func CollectUnchangedLinesMapping(dir string, oldCommit string, newCommit string
 }
 
 func CollectUnchangedLinesMappingWithDetails(gitDiff *git.GitDiff) (map[string]LineMapping, error) {
-	fileDetails, err := gitDiff.AllFilesDetails()
+	fileDetails, err := gitDiff.AllFilesDetailsV2()
 	if err != nil {
 		return nil, err
 	}
