@@ -131,7 +131,7 @@ func Merge(old Profile, oldCodeGetter func(f string) (string, error), newProfile
 		}
 		var oldCode string
 		var newCode string
-		oldCode, err = oldCodeGetter(pkgFile)
+		oldCode, err = oldCodeGetter(oldFile)
 		if err != nil {
 			return false
 		}
