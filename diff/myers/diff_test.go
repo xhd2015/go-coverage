@@ -51,9 +51,18 @@ func TestFileA(t *testing.T) {
 
 // go test -run TestBlockMapping -v ./diff/myers
 func TestBlockMapping(t *testing.T) {
+	testBlockMapping(t, "testdata/a_old.txt", "testdata/a_new.txt")
+}
+
+// func TestLineMapping(t *testing.T) {
+// 	testBlockMapping(t, "testdata/a_old.txt", "testdata/a_new.txt")
+// }
+
+// go test -run TestBlockMapping -v ./diff/myers
+func testBlockMapping(t *testing.T, oldFile string, newFile string) {
 	m := ComputeBlockMapping(
-		readLines("testdata/a_old.txt"),
-		readLines("testdata/a_new.txt"),
+		readLines(oldFile),
+		readLines(newFile),
 	)
 	s := fmt.Sprintf("%+v", m)
 	// NOTE: 0-baesd
