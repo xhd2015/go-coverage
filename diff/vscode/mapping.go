@@ -60,6 +60,8 @@ func ForeachLineMapping(changes []*LineChange, oldLines int, newLines int, fn fu
 		if i < n {
 			change := changes[i]
 
+			changeType = ChangeTypeUpdate
+
 			oldLineEnd = change.OriginalStartLineNumber
 			oldLineStartNext = change.OriginalEndLineNumber + 1
 			oldLineStartNextForCallback = oldLineStartNext
