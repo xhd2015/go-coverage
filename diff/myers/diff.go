@@ -28,7 +28,8 @@ func operations(a, b []string) []*operation {
 	return operationsComplex(a, b, nil, nil)
 }
 
-// for `onUpdate`, if newLineEnd - newLineStart = 0, then it is a deletion. Otherwise an update
+// for `onUpdate`, if newLineEnd - newLineStart = 0, then it is a deletion. Otherwise an update.
+// NOTE: newLineEnd,oldLineEnd is exclusive.
 func operationsComplex(a, b []string, onSame func(oldLine, newLine int), onUpdate func(oldLineStart, oldLineEnd, newLineStart, newLineEnd int)) []*operation {
 	if len(a) == 0 && len(b) == 0 {
 		return nil

@@ -54,9 +54,10 @@ func TestBlockMapping(t *testing.T) {
 	testBlockMapping(t, "testdata/a_old.txt", "testdata/a_new.txt")
 }
 
-// func TestLineMapping(t *testing.T) {
-// 	testBlockMapping(t, "testdata/a_old.txt", "testdata/a_new.txt")
-// }
+// go test -run TestBlockMappingV2 -v ./diff/myers
+func TestBlockMappingV2(t *testing.T) {
+	testBlockMappingV2(t, "testdata/b_del_update_old.txt", "testdata/b_del_update_new.txt")
+}
 
 // go test -run TestBlockMapping -v ./diff/myers
 func testBlockMapping(t *testing.T, oldFile string, newFile string) {
@@ -70,6 +71,20 @@ func testBlockMapping(t *testing.T, oldFile string, newFile string) {
 	if s != exp {
 		t.Fatalf("expect %s = %+v, actual:%+v", `s`, exp, s)
 	}
+}
+
+func testBlockMappingV2(t *testing.T, oldFile string, newFile string) {
+	m := ComputeBlockMappingV2(
+		readLines(oldFile),
+		readLines(newFile),
+	)
+	s := fmt.Sprintf("%+v", m)
+	t.Logf("res:%v", s)
+	// // NOTE: 0-baesd
+	// exp := `map[1:1 2:2 3:3 4:4 5:5 10:6 16:8]`
+	// if s != exp {
+	// 	t.Fatalf("expect %s = %+v, actual:%+v", `s`, exp, s)
+	// }
 }
 
 func jsonstr(v interface{}) string {

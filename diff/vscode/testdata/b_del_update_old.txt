@@ -1,0 +1,12 @@
+package what_old
+
+import (
+    "fmt"
+)
+
+var x = 10 // deleted
+var j = 20
+
+func main(){
+    fmt.Printf("hello man")
+}
