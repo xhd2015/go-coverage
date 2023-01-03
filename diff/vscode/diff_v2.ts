@@ -11,6 +11,7 @@ export interface Request {
 
 async function run() {
     let data = ''
+    process.stdin.resume()
     process.stdin.on('data', e => {
         data += e
     })
