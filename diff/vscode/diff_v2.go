@@ -17,8 +17,8 @@ var diffV2File string
 var initErr error
 
 func Diff(req *Request) (*Result, error) {
-	return DiffV2(req)
-	// return DiffV1(req)
+	// return DiffV2(req)
+	return DiffV1(req)
 }
 
 func DiffV2(req *Request) (*Result, error) {
