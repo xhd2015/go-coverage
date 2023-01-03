@@ -11,6 +11,10 @@ $ go generate ./...
 # use gen/diff.js as a parser
 $ echo -ne '{"oldLines":["A","B","C"],"newLines":["A","B1","C"]}' | node diff/vscode/gen/diff.js
 {"quitEarly":false,"changes":[{"originalStartLineNumber":2,"originalEndLineNumber":2,"modifiedStartLineNumber":2,"modifiedEndLineNumber":2}]}
+
+# diff_v2
+$ echo -ne '{"oldLines":["A","B","C"],"newLines":["A","B1","C"]}' | node diff/vscode/gen/diff_v2.js
+{"quitEarly":false,"changes":[{"originalStartLineNumber":2,"originalEndLineNumber":2,"modifiedStartLineNumber":2,"modifiedEndLineNumber":2}]}
 ```
 
 # Use as a standby servant of golang

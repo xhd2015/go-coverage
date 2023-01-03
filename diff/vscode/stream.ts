@@ -1,5 +1,8 @@
 import * as readline from "node:readline/promises"
 
+// see https://nodejs.org/docs/v0.4.7/api/process.html#process.stdin
+process.stdin.resume()
+
 const rl = readline.createInterface({ input: process.stdin });
 
 const callbacks: ((line: string, e: any, parseErr: Error) => void)[] = []

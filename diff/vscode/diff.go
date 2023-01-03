@@ -4,10 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
-	"path"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -139,63 +137,63 @@ func (c *output) Write(p []byte) (n int, err error) {
 
 func initProcess() {
 	initOnce.Do(func() {
-		tmpFile, err := os.MkdirTemp(os.TempDir(), "vscode-diff")
-		if err != nil {
-			panic(fmt.Errorf("cannot create vscode-diff dir: %v", err))
-		}
-		diffFile = path.Join(tmpFile, "diff.js")
-		err = ioutil.WriteFile(diffFile, []byte(diffJSCode), 0777)
-		if err != nil {
-			panic(fmt.Errorf("cannot create file:%s %v", diffFile, err))
-		}
-		cmd = exec.Command("node", diffFile)
-		cmdIn = &input{
-			lineCh: make(chan string, 10),
-		}
-		cmdOut = &output{
-			respCh: make(chan respLine, 10),
-		}
+		doInitProcessV1("diff.js", diffJSCode)
+	})
+}
 
-		// cmd.Stdin = bytes.NewReader([]byte("{}"))
-		cmd.Stdin = cmdIn
-		cmd.Stdout = cmdOut
-		cmd.Stderr = os.Stderr
-		cmd.Env = append([]string{}, os.Environ()...)
-		cmd.Env = append(cmd.Env, "RESPONSE_ID_PREFIX=true")
-		cmd.Env = append(cmd.Env, "EXIT_AFTER_PING_TIMEOUT=true")
-		if disableDebugLog {
-			cmd.Env = append(cmd.Env, "DISABLE_DEBUG_LOG=true")
-		}
-		// cmd.Stdout = os.Stdout
-		err = cmd.Start()
-		if err != nil {
-			panic(fmt.Errorf("start node err: %v %v", cmd, err))
-		}
+func doInitProcessV1(file string, code string) {
+	var err error
+	diffFile, err = initCode(file, code)
+	if err != nil {
+		panic(err)
+	}
+	cmd = exec.Command("node", diffFile)
+	cmdIn = &input{
+		lineCh: make(chan string, 10),
+	}
+	cmdOut = &output{
+		respCh: make(chan respLine, 10),
+	}
 
-		// ping
-		go func() {
-			ticker := time.NewTicker(5 * time.Second)
-			defer ticker.Stop()
-			for range ticker.C {
-				cmdIn.lineCh <- `{"ping":true}`
-			}
+	// cmd.Stdin = bytes.NewReader([]byte("{}"))
+	cmd.Stdin = cmdIn
+	cmd.Stdout = cmdOut
+	cmd.Stderr = os.Stderr
+	cmd.Env = append([]string{}, os.Environ()...)
+	cmd.Env = append(cmd.Env, "RESPONSE_ID_PREFIX=true")
+	cmd.Env = append(cmd.Env, "EXIT_AFTER_PING_TIMEOUT=true")
+	if disableDebugLog {
+		cmd.Env = append(cmd.Env, "DISABLE_DEBUG_LOG=true")
+	}
+	// cmd.Stdout = os.Stdout
+	err = cmd.Start()
+	if err != nil {
+		panic(fmt.Errorf("start node err: %v %v", cmd, err))
+	}
+
+	// ping
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			cmdIn.lineCh <- `{"ping":true}`
+		}
+	}()
+
+	// retrieve result
+	go func() {
+		defer func() {
+			close(cmdIn.lineCh)
+			close(cmdOut.respCh)
 		}()
-
-		// retrieve result
-		go func() {
-			defer func() {
-				close(cmdIn.lineCh)
-				close(cmdOut.respCh)
-			}()
-			for resp := range cmdOut.respCh {
-				if val, ok := respMap.Load(resp.ID); ok {
-					if ch, ok := val.(chan string); ok {
-						ch <- resp.Content
-					}
+		for resp := range cmdOut.respCh {
+			if val, ok := respMap.Load(resp.ID); ok {
+				if ch, ok := val.(chan string); ok {
+					ch <- resp.Content
 				}
 			}
-		}()
-	})
+		}
+	}()
 }
 
 type Request struct {
@@ -243,7 +241,7 @@ func DestroyNow() error {
 //
 
 // TODO: may spawn as many process as possible
-func Diff(req *Request) (*Result, error) {
+func DiffV1(req *Request) (*Result, error) {
 	initProcess()
 
 	ireq := &internRequest{

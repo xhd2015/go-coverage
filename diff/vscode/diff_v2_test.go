@@ -6,15 +6,11 @@ import (
 	"time"
 )
 
-func initTest() {
-	disableDebugLog = false
-}
-
-// go test -run TestDiff -v ./diff/vscode
-func TestDiff(t *testing.T) {
+// go test -run TestDiffV2 -v ./diff/vscode
+func TestDiffV2(t *testing.T) {
 	initTest()
 	defer DestroyNow()
-	res, err := DiffV1(&Request{
+	res, err := DiffV2(&Request{
 		OldLines: []string{"A", "B", "C"},
 		NewLines: []string{"A", "B2", "C"},
 	})
@@ -50,45 +46,13 @@ func TestDiff(t *testing.T) {
 	}
 }
 
-// go test -run TestKeepAliveAfter20s -v ./diff/vscode
-func TestKeepAliveAfter20s(t *testing.T) {
-	initTest()
-	defer DestroyNow()
-	res, err := Diff(&Request{
-		OldLines: []string{"A", "B", "C"},
-		NewLines: []string{"A", "B2", "C"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = res
-	time.Sleep(20 * time.Second)
-
-	res, err = DiffV1(&Request{
-		OldLines: []string{"A", "B", "C"},
-		NewLines: []string{"A", "B2", "C"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	resJSONBytes, err := json.Marshal(res)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resJSON := string(resJSONBytes)
-	resJSONExpect := `{"quitEarly":false,"changes":[{"originalStartLineNumber":2,"originalEndLineNumber":2,"modifiedStartLineNumber":2,"modifiedEndLineNumber":2}]}`
-	if resJSON != resJSONExpect {
-		t.Fatalf("expect %s = %+v, actual:%+v", `resJSON`, resJSONExpect, resJSON)
-	}
-}
-
-// go test  -bench=BenchmarkDiffV1 -benchtime=10s -run=NONE -v ./diff/vscode
-// result:  -           10845941 ns/op = 10.8ms/op, the myers is 1585 ns/op,  its 6842x slower than that native go implementation.
+// go test  -bench=BenchmarkDiffV2 -benchtime=10s -run=NONE -v ./diff/vscode
+// result:  -           109311564 ns/op = 109ms/op, the myers is 1585 ns/op,  its 6842x slower than that native go implementation.
 // latency: - ms
-func BenchmarkDiffV1(b *testing.B) {
+func BenchmarkDiffV2(b *testing.B) {
 	// defer DestroyNow() // DON'T DO THIS, this will effectively close all thing
 	for i := 0; i < b.N; i++ {
-		res, err := DiffV1(&Request{
+		res, err := DiffV2(&Request{
 			OldLines: []string{"A", "B", "C"},
 			NewLines: []string{"A", "B2", "C"},
 		})

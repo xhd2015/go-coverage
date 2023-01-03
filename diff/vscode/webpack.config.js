@@ -7,6 +7,10 @@ module.exports = {
       import: "./diff.ts",
       filename: "diff.js",
     },
+    diff_v2: {
+      import: "./diff_v2.ts",
+      filename: "diff_v2.js",
+    },
     diffCmd: {
       import: "./cmd.ts",
       filename: "cmd.js",
