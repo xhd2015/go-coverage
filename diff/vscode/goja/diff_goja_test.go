@@ -1,4 +1,4 @@
-package vscode
+package goja
 
 import (
 	"encoding/json"

@@ -1,4 +1,4 @@
-package vscode
+package goja
 
 import (
 	"github.com/dop251/goja"
