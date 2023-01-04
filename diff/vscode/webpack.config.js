@@ -11,6 +11,10 @@ module.exports = {
       import: "./diff_v2.ts",
       filename: "diff_v2.js",
     },
+    diff_goja: {
+      import: "./diff_goja.ts",
+      filename: "diff_goja.js",
+    },
     diffCmd: {
       import: "./cmd.ts",
       filename: "cmd.js",
@@ -19,6 +23,7 @@ module.exports = {
   output: {
     path: path.resolve(__dirname, "gen"),
     libraryTarget: "umd", // for nodejs need this
+    globalObject: "globalThis", // goja only recognize globalThis, not the default global.
   },
   module: {
     rules: [

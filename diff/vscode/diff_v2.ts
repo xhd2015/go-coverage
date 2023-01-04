@@ -1,7 +1,6 @@
 import { DiffComputer } from "monaco-editor/esm/vs/editor/common/diff/diffComputer"
 
 export interface Request {
-    id: string
     oldLines: string[]
     newLines: string[]
 
@@ -18,7 +17,7 @@ async function run() {
     process.stdin.on('end', () => {
         const req = JSON.parse(data) as Request
 
-        const { id, oldLines, newLines, computeChar, pretty } = req || {}
+        const { oldLines, newLines, computeChar, pretty } = req || {}
 
         const computer = new DiffComputer(oldLines || [], newLines || [], {
             shouldMakePrettyDiff: pretty !== false,

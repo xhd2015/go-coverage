@@ -143,7 +143,7 @@ func initProcess() {
 
 func doInitProcessV1(file string, code string) {
 	var err error
-	diffFile, err = initCode(file, code)
+	diffFile, err = InitCode(file, code)
 	if err != nil {
 		panic(err)
 	}

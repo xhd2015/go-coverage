@@ -17,6 +17,30 @@ $ echo -ne '{"oldLines":["A","B","C"],"newLines":["A","B1","C"]}' | node diff/vs
 {"quitEarly":false,"changes":[{"originalStartLineNumber":2,"originalEndLineNumber":2,"modifiedStartLineNumber":2,"modifiedEndLineNumber":2}]}
 ```
 
+# Use goja
+
+The goja implementation comes with [goja](https://github.com/dop251/goja), a javascript runtime implemented in go, but needs go1.16.
+
+If you have go1.16 you can opt in with that:
+
+```go
+...
+import (
+    "github.com/xhd2015/go-coverage/diff/vscode/goja"
+)
+func init(){
+	goja.UseGojaDiff()
+}
+```
+
+The performance is in the middle:
+
+```
+native go: 1585 ns/op = 0.001ms/op
+goja: 590299 ns/op = 0.59ms/op
+the stdin-stdout:  109311564 ns/op = 109ms/op
+```
+
 # Use as a standby servant of golang
 
 ```go

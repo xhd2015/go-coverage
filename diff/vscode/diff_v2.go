@@ -16,9 +16,12 @@ var initV2Once sync.Once
 var diffV2File string
 var initErr error
 
+// user can set another DiffImpl
+var DiffImpl = DiffV1
+
 func Diff(req *Request) (*Result, error) {
 	// return DiffV2(req)
-	return DiffV1(req)
+	return DiffImpl(req)
 }
 
 func DiffV2(req *Request) (*Result, error) {
@@ -41,7 +44,7 @@ func DiffV2(req *Request) (*Result, error) {
 
 func runSyncCmd(input io.Reader) (output []byte, err error) {
 	initV2Once.Do(func() {
-		diffV2File, initErr = initCode("diff_v2.js", diffV2JSCode)
+		diffV2File, initErr = InitCode("diff_v2.js", diffV2JSCode)
 	})
 	if initErr != nil {
 		return nil, initErr
@@ -59,7 +62,7 @@ func runSyncCmd(input io.Reader) (output []byte, err error) {
 
 	return buf.Bytes(), nil
 }
-func initCode(file string, code string) (jsFile string, err error) {
+func InitCode(file string, code string) (jsFile string, err error) {
 	tmpFile, err := os.MkdirTemp(os.TempDir(), "vscode-diff")
 	if err != nil {
 		return "", fmt.Errorf("cannot create vscode-diff dir: %v", err)
