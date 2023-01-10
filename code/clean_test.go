@@ -18,7 +18,30 @@ import (
 func TestBasic(t *testing.T) {
 	f := parseFile("testdata/basic.go.txt")
 
-	s := Clean(f, CleanOpts{})
+	s := Clean(f, CleanOpts{
+		Log: true,
+	})
+	t.Logf("%s", s)
+	if strings.Contains(s, "TODO:") {
+		t.Fatalf("contains TODO")
+	}
+}
+
+// NOTE: when running TestGo1_18Generic, we expect:
+//    go1.18 to compile successfully and clean code correctly
+//    go1.17 and under to compile also successfully, but clean code failed (because test data syntax is unknown to go1.17)
+//
+// go test -run TestGo1_18Generic -v ./code
+// see coverage:
+//    go test -run TestGo1_18Generic -coverprofile=cover.out -v ./code ;go tool cover -html=cover.out
+func TestGo1_18Generic(t *testing.T) {
+	f := parseFile("testdata/go1.18-generic.go.txt")
+
+	s := Clean(f, CleanOpts{
+		Log:             true,
+		LogIndent:       4,
+		DisallowUnknown: true,
+	})
 	t.Logf("%s", s)
 	if strings.Contains(s, "TODO:") {
 		t.Fatalf("contains TODO")

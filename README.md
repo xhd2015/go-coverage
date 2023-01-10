@@ -36,3 +36,15 @@ The algorithm effectively provides incrimental testing coverage across muiltpe c
 ```bash
 go generate ./...
 ```
+
+# Required go version: 1.16
+
+When build with go1.14:
+
+```bash
+$ with-go1.14 go build ./...
+# github.com/dop251/goja/parser
+../../gopath/pkg/mod/github.com/dop251/goja@v0.0.0-20221229151140-b95230a9dbad/parser/parser.go:150:9: undefined: os.ReadFile
+../../gopath/pkg/mod/github.com/dop251/goja@v0.0.0-20221229151140-b95230a9dbad/parser/statement.go:901:19: undefined: os.ReadFile
+note: module requires Go 1.16
+```

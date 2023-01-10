@@ -10,7 +10,10 @@ import (
 )
 
 type CleanOpts struct {
-	ShouldFormat func(n ast.Node) bool
+	ShouldFormat    func(n ast.Node) bool
+	Log             bool
+	LogIndent       int  // spaces between lines, default 1 space
+	DisallowUnknown bool // disallow unknown
 }
 
 func Fclean(w io.Writer, n ast.Node, opts CleanOpts) {
@@ -45,8 +48,27 @@ func CleanList(lister func(func(n ast.Node, last bool)), join string, opts Clean
 type formatter struct {
 	w    io.Writer
 	opts CleanOpts
+
+	level int
 }
 
+func logNode(n ast.Node) string {
+	switch n := n.(type) {
+	case *ast.Ident:
+		return n.Name
+	case *ast.FuncDecl:
+		return n.Name.Name
+	case *ast.Field:
+		names := make([]string, 0, len(n.Names))
+		for _, n := range n.Names {
+			names = append(names, n.Name)
+		}
+		return strings.Join(names, ", ")
+	case *ast.TypeSpec:
+		return n.Name.Name
+	}
+	return ""
+}
 func (c *formatter) cleanCode(n ast.Node) {
 	if n == nil {
 		panic(fmt.Errorf("cleanCode encountered nil"))
@@ -54,6 +76,18 @@ func (c *formatter) cleanCode(n ast.Node) {
 	if c.opts.ShouldFormat != nil && !c.opts.ShouldFormat(n) {
 		return
 	}
+	if c.opts.Log {
+		s := logNode(n)
+		if s != "" {
+			s = "[" + s + "]"
+		}
+		indent := c.opts.LogIndent
+		if indent <= 0 {
+			indent = 1
+		}
+		fmt.Printf("%s%T%s\n", strings.Repeat(" ", c.level*indent), n, s)
+	}
+	c.level++
 	switch n := n.(type) {
 	case *ast.Ident:
 		c.add(n.Name)
@@ -85,9 +119,12 @@ func (c *formatter) cleanCode(n ast.Node) {
 		}
 		// check Spec
 	case *ast.TypeSpec:
-		c.add("type ", n.Name.Name, " ")
+		c.add("type ", n.Name.Name)
+		c.handleTypeParamsForTypeSpec(n)
 		if n.Assign.IsValid() {
 			c.add("=")
+		} else {
+			c.add(" ")
 		}
 		c.cleanCode(n.Type)
 	case *ast.ValueSpec:
@@ -270,9 +307,12 @@ func (c *formatter) cleanCode(n ast.Node) {
 		c.add(")")
 		// check Type
 	case *ast.FuncType:
+		// when from *FuncDecl, the 'func' and `name`
+		// is prepended already
 		if n.Func.IsValid() {
 			c.add("func")
 		}
+		c.handleTypeParams(n)
 		c.add("(")
 		c.cleanFields(n.Params.List, ",")
 		c.add(")")
@@ -391,9 +431,14 @@ func (c *formatter) cleanCode(n ast.Node) {
 			}
 		}
 	default:
-		c.add(fmt.Sprintf("TODO: %T", n))
-		// panic(fmt.Errorf("unhandled %T", n))
+		if !c.handleFallback(n) {
+			if c.opts.DisallowUnknown {
+				panic(fmt.Errorf("unhandled %T", n))
+			}
+			c.add(fmt.Sprintf("TODO: %T", n))
+		}
 	}
+	c.level--
 }
 
 func (c *formatter) cleanList(lister func(func(n ast.Node, last bool)), join string) {
