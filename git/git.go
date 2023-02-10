@@ -2,11 +2,16 @@ package git
 
 import (
 	"fmt"
+	"io/ioutil"
+	"path"
 	"strings"
 	"sync"
 
 	"github.com/xhd2015/go-coverage/sh"
 )
+
+// a special commit that referes to current working directory(a pseduo commit)
+const COMMIT_WORKING = "WORKING"
 
 // find rename
 // git diff --find-renames --diff-filter=R   HEAD~10 HEAD|grep -A 3 '^diff --git a/'|grep rename
@@ -68,8 +73,15 @@ func NewSnapshot(dir string, commit string) *GitSnapshot {
 	}
 }
 
+func QuoteCommit(commit string) string {
+	if commit == COMMIT_WORKING {
+		return ""
+	}
+	return sh.Quote(getRef(commit))
+}
+
 func (c *GitRepo) FindUpdate(oldCommit string, newCommit string) ([]string, error) {
-	cmd := fmt.Sprintf(`git -C %s diff --diff-filter=M --name-only --ignore-submodules %s %s`, sh.Quote(c.Dir), sh.Quote(getRef(oldCommit)), sh.Quote(getRef(newCommit)))
+	cmd := fmt.Sprintf(`git -C %s diff --diff-filter=M --name-only --ignore-submodules %s %s`, sh.Quote(c.Dir), QuoteCommit(oldCommit), QuoteCommit(newCommit))
 	stdout, _, err := sh.RunBashCmdOpts(cmd, sh.RunBashOptions{
 		NeedStdOut: true,
 	})
@@ -79,7 +91,7 @@ func (c *GitRepo) FindUpdate(oldCommit string, newCommit string) ([]string, erro
 	return splitLinesFilterEmpty(stdout), nil
 }
 func (c *GitRepo) FindAdded(oldCommit string, newCommit string) ([]string, error) {
-	cmd := fmt.Sprintf(`git -C %s diff --diff-filter=A --name-only --ignore-submodules %s %s`, sh.Quote(c.Dir), sh.Quote(getRef(oldCommit)), sh.Quote(getRef(newCommit)))
+	cmd := fmt.Sprintf(`git -C %s diff --diff-filter=A --name-only --ignore-submodules %s %s`, sh.Quote(c.Dir), QuoteCommit(oldCommit), QuoteCommit(newCommit))
 	stdout, _, err := sh.RunBashCmdOpts(cmd, sh.RunBashOptions{
 		NeedStdOut: true,
 	})
@@ -99,7 +111,7 @@ func (c *GitRepo) FindRenames(oldCommit string, newCommit string) (map[string]st
 	// --- a/test/stubv2/boot/boot.go
 	// +++ b/test/stub/boot/boot.go
 	// @@ -4,8 +4,10 @@ import (
-	cmd := fmt.Sprintf(`git -C %s diff --find-renames --diff-filter=R --ignore-submodules %s %s|grep -A 3 '^diff --git a/'|grep -E '^rename' || true`, sh.Quote(c.Dir), sh.Quote(getRef(oldCommit)), sh.Quote(getRef(newCommit)))
+	cmd := fmt.Sprintf(`git -C %s diff --find-renames --diff-filter=R --ignore-submodules %s %s|grep -A 3 '^diff --git a/'|grep -E '^rename' || true`, sh.Quote(c.Dir), QuoteCommit(oldCommit), QuoteCommit(newCommit))
 	stdout, stderr, err := sh.RunBashCmdOpts(cmd, sh.RunBashOptions{
 		// Verbose:    true,
 		NeedStdOut: true,
@@ -127,7 +139,7 @@ func (c *GitRepo) FindRenames(oldCommit string, newCommit string) (map[string]st
 
 // without --ignore-submodules, git diff may include diff of dirs
 func (c *GitRepo) FindRenamesV2(oldCommit string, newCommit string, fn func(newFile string, oldFile string, percent string)) error {
-	cmd := fmt.Sprintf(`git -C %s diff --diff-filter=R --summary --ignore-submodules %s %s || true`, sh.Quote(c.Dir), sh.Quote(getRef(oldCommit)), sh.Quote(getRef(newCommit)))
+	cmd := fmt.Sprintf(`git -C %s diff --diff-filter=R --summary --ignore-submodules %s %s || true`, sh.Quote(c.Dir), QuoteCommit(oldCommit), QuoteCommit(newCommit))
 	stdout, stderr, err := sh.RunBashCmdOpts(cmd, sh.RunBashOptions{
 		// Verbose:    true,
 		NeedStdOut: true,
@@ -229,6 +241,13 @@ func (c *GitSnapshot) GetContent(file string) (string, error) {
 	if !c.fileMap[normFile] {
 		return "", fmt.Errorf("not a file, maybe a dir:%v", file)
 	}
+	if c.Commit == COMMIT_WORKING {
+		content, err := ioutil.ReadFile(path.Join(c.Dir, normFile))
+		if err != nil {
+			return "", err
+		}
+		return string(content), nil
+	}
 
 	content, _, err := sh.RunBashWithOpts([]string{
 		fmt.Sprintf("git -C %s cat-file -p %s:%s", sh.Quote(c.Dir), sh.Quote(c.ref()), sh.Quote(normFile)),
@@ -242,9 +261,13 @@ func (c *GitSnapshot) ListFiles() ([]string, error) {
 	return c.files, c.filesErr
 }
 func (c *GitSnapshot) ensureInitList() {
+	withTree := ""
+	if c.Commit != COMMIT_WORKING {
+		withTree = fmt.Sprintf("--with-tree %s", QuoteCommit(c.Commit))
+	}
 	c.filesInit.Do(func() {
 		stdout, _, err := sh.RunBashWithOpts([]string{
-			fmt.Sprintf("git -C %s ls-files --with-tree %s", sh.Quote(c.Dir), sh.Quote(c.ref())),
+			fmt.Sprintf("git -C %s ls-files %s", sh.Quote(c.Dir), withTree),
 		}, sh.RunBashOptions{
 			Verbose:    true,
 			NeedStdOut: true,
