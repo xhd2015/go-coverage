@@ -3,6 +3,9 @@ package git
 import (
 	"fmt"
 	"sync"
+
+	"github.com/xhd2015/go-coverage/git/gitops"
+	"github.com/xhd2015/go-coverage/model"
 )
 
 type GitDiff struct {
@@ -32,6 +35,10 @@ type GitDiff struct {
 	fileDetailsOnce sync.Once
 	fileDetails     map[string]*FileDetail
 	fileDetailsErr  error
+
+	fileDetailsV2Once sync.Once
+	fileDetailsV2     map[string]*model.FileDetail
+	fileDetailsV2Err  error
 }
 
 type ChangeType string
@@ -42,11 +49,7 @@ const (
 	ChangeTypeAdded     ChangeType = "added"
 )
 
-type FileDetail struct {
-	IsNew          bool   `json:",omitempty"`
-	RenamedFrom    string `json:",omitempty"` // empty if not renamed
-	ContentChanged bool   `json:",omitempty"` // content change type
-}
+type FileDetail = model.FileDetail
 
 func NewGitDiff(dir string, oldCommit string, newCommit string) *GitDiff {
 	return &GitDiff{
@@ -109,52 +112,11 @@ func (c *GitDiff) AllFilesDetails() (map[string]*FileDetail, error) {
 	return c.fileDetails, c.fileDetailsErr
 }
 
-func (c *GitDiff) AllFilesDetailsV2() (map[string]*FileDetail, error) {
-	c.fileDetailsOnce.Do(func() {
-		allFiles, err := c.AllFiles()
-		if err != nil {
-			c.fileDetailsErr = fmt.Errorf("get all files err:%v", err)
-			return
-		}
-		updates, err := c.GetUpdates()
-		if err != nil {
-			c.fileDetailsErr = fmt.Errorf("get updates err:%v", err)
-			return
-		}
-		added, err := c.GetNew()
-		if err != nil {
-			c.fileDetailsErr = fmt.Errorf("get added err:%v", err)
-			return
-		}
-		updateMap := make(map[string]bool, len(updates))
-		for _, file := range updates {
-			updateMap[file] = true
-		}
-
-		addedMap := make(map[string]bool, len(added))
-		for _, file := range added {
-			addedMap[file] = true
-		}
-
-		fileDetailsMap := make(map[string]*FileDetail, len(allFiles))
-		for _, file := range allFiles {
-			fileDetailsMap[file] = &FileDetail{
-				IsNew:          addedMap[file],
-				ContentChanged: updateMap[file],
-			}
-		}
-		err = FindRenamesV2(c.dir, c.oldCommit, c.newCommit, func(newFile, oldFile, percent string) {
-			d := fileDetailsMap[newFile]
-			d.RenamedFrom = oldFile
-			d.ContentChanged = d.ContentChanged || percent != "100%"
-		})
-		if err != nil {
-			c.fileDetailsErr = fmt.Errorf("get rename files err:%v", err)
-			return
-		}
-		c.fileDetails = fileDetailsMap
+func (c *GitDiff) AllFilesDetailsV2() (map[string]*model.FileDetail, error) {
+	c.fileDetailsV2Once.Do(func() {
+		c.fileDetailsV2, c.fileDetailsV2Err = gitops.DiffCommit(c.dir, c.newCommit, c.oldCommit, nil)
 	})
-	return c.fileDetails, c.fileDetailsErr
+	return c.fileDetailsV2, c.fileDetailsV2Err
 }
 func (c *GitDiff) GetUpdateAndRenames() (newToOld map[string]string, err error) {
 	c.mergeOnce.Do(func() {
