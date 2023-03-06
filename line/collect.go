@@ -26,16 +26,19 @@ type LineMapping map[int]int
 // CollectUnchangedLinesMapping
 func CollectUnchangedLinesMapping(dir string, oldCommit string, newCommit string) (map[string]LineMapping, error) {
 	gitDiff := git.NewGitDiff(dir, oldCommit, newCommit)
-	return CollectUnchangedLinesMappingWithDetails(gitDiff)
+	return CollectUnchangedLinesMappingWithDetails(gitDiff, nil)
 }
 
-func CollectUnchangedLinesMappingWithDetails(gitDiff *git.GitDiff) (map[string]LineMapping, error) {
+func CollectUnchangedLinesMappingWithDetails(gitDiff *git.GitDiff, filterFile func(file string) bool) (map[string]LineMapping, error) {
 	fileDetails, err := gitDiff.AllFilesDetailsV2()
 	if err != nil {
 		return nil, err
 	}
 	mapping := make(map[model.PkgFile]LineMapping, len(fileDetails))
 	for file, fd := range fileDetails {
+		if filterFile != nil && !filterFile(file) {
+			continue
+		}
 		if fd.IsNew || !fd.ContentChanged {
 			continue
 		}

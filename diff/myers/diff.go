@@ -6,7 +6,10 @@
 package myers
 
 import (
+	"runtime"
 	"strings"
+	"sync"
+	"time"
 )
 
 // Sources:
@@ -28,14 +31,93 @@ func operations(a, b []string) []*operation {
 	return operationsComplex(a, b, nil, nil)
 }
 
+var alloc arrAlloctor
+
+func newArrNaive(size int) []int {
+	return make([]int, size)
+}
+func newArrPooled(size int) []int {
+	return alloc.newArr(size)
+}
+func returnArrPooled(size int, arr []int) {
+	alloc.returnArr(size, arr)
+}
+
+type arrAlloctor struct {
+	mutex sync.Mutex
+	pool  [][][]int
+}
+
+func (c *arrAlloctor) newArr(size int) []int {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	targetLen := size + 1
+	n := len(c.pool)
+	if targetLen > n {
+		c.pool = append(c.pool, make([][][]int, targetLen-n)...)
+	}
+	p := c.pool[size]
+	var arr []int
+	if len(p) == 0 {
+		arr = make([]int, size)
+		p = append(p, arr)
+	} else {
+		arr = p[len(p)-1]
+		p = p[:len(p)-1]
+		// reset
+		for i := 0; i < len(arr); i++ {
+			arr[i] = 0
+		}
+	}
+	c.pool[size] = p
+	return arr
+}
+
+func (c *arrAlloctor) returnArr(size int, arr []int) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	if size >= len(c.pool) {
+		return
+	}
+	c.pool[size] = append(c.pool[size], arr)
+}
+
 // for `onUpdate`, if newLineEnd - newLineStart = 0, then it is a deletion. Otherwise an update.
 // NOTE: newLineEnd,oldLineEnd is exclusive.
 func operationsComplex(a, b []string, onSame func(oldLine, newLine int), onUpdate func(oldLineStart, oldLineEnd, newLineStart, newLineEnd int)) []*operation {
 	if len(a) == 0 && len(b) == 0 {
 		return nil
 	}
+	// newArrPooled has bug
 
-	trace, offset := shortestEditSequence(a, b)
+	usePooled := false // usePooled no improve
+	useGc := false     // useGc no improve
+	useSleep := false  // useSleep no improve
+
+	if useSleep {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// // space complexity:  O((N+M)^2)
+	var trace [][]int
+	var offset int
+
+	if useGc {
+		runtime.GC()
+	}
+
+	if usePooled {
+		trace, offset = shortestEditSequence(a, b, newArrPooled)
+		defer func() {
+			for _, arr := range trace {
+				returnArrPooled(len(arr), arr)
+			}
+		}()
+	} else {
+		// newArrNaive consumes too much memroy
+		trace, offset = shortestEditSequence(a, b, newArrNaive)
+	}
+
 	snakes := backtrack(trace, len(a), len(b), offset)
 
 	M, N := len(a), len(b)
@@ -152,15 +234,15 @@ func backtrack(trace [][]int, x, y, offset int) [][]int {
 }
 
 // shortestEditSequence returns the shortest edit sequence that converts a into b.
-func shortestEditSequence(a, b []string) ([][]int, int) {
+func shortestEditSequence(a, b []string, newArr func(size int) []int) ([][]int, int) {
 	M, N := len(a), len(b)
-	V := make([]int, 2*(N+M)+1)
+	V := newArr(2*(N+M) + 1)
 	offset := N + M
 	trace := make([][]int, N+M+1)
 
 	// Iterate through the maximum possible length of the SES (N+M).
 	for d := 0; d <= N+M; d++ {
-		copyV := make([]int, len(V))
+		copyV := newArr(len(V))
 		// k lines are represented by the equation y = x - k. We move in
 		// increments of 2 because end points for even d are on even k lines.
 		for k := -d; k <= d; k += 2 {
