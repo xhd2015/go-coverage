@@ -68,7 +68,8 @@ func ComputeBlockMappingUsingVscodeDiff(oldBlocks []string, newBlocks []string) 
 	vscode.ForeachLineMapping(res.Changes, len(oldBlocks), len(newBlocks), func(oldLineStart, oldLineEnd, newLineStart, newLineEnd int, changeType vscode.ChangeType) {
 		if changeType == vscode.ChangeTypeUnchange {
 			for i, j := oldLineStart, newLineStart; i < oldLineEnd; i++ {
-				m[i-1] = j - 1
+				// NOTE: the mapping is from new line to old line
+				m[j-1] = i - 1
 				j++
 			}
 		}
