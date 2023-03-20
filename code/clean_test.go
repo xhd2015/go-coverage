@@ -48,8 +48,8 @@ func TestGo1_18Generic(t *testing.T) {
 	}
 }
 
-// go test -run TestProject -v ./code
-func TestProject(t *testing.T) {
+// go test -run TestLoadProject -v ./code
+func TestLoadProject(t *testing.T) {
 	ctx := context.Background()
 	dir := os.Getenv("TEST_DIR")
 	if dir == "" {
@@ -67,6 +67,19 @@ func TestProject(t *testing.T) {
 		return true
 	}, nil)
 
+}
+
+// go test -run TestCleanSwitch -v ./code
+func TestCleanSwitch(t *testing.T) {
+	f := parseFile("testdata/switch.go.txt")
+
+	s := Clean(f, CleanOpts{
+		// Log: true,
+	})
+	t.Logf("%s", s)
+	if strings.Contains(s, "TODO:") {
+		t.Fatalf("contains TODO")
+	}
 }
 
 func parseFile(f string) *goast.File {

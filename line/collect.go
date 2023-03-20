@@ -22,19 +22,21 @@ import (
 // }
 
 type LineMapping map[int]int
+type DeletedLineMapping map[int]bool
 
 // CollectUnchangedLinesMapping
-func CollectUnchangedLinesMapping(dir string, oldCommit string, newCommit string) (map[string]LineMapping, error) {
+func CollectUnchangedLinesMapping(dir string, oldCommit string, newCommit string) (map[string]LineMapping, map[string]DeletedLineMapping, error) {
 	gitDiff := git.NewGitDiff(dir, oldCommit, newCommit)
 	return CollectUnchangedLinesMappingWithDetails(gitDiff, nil)
 }
 
-func CollectUnchangedLinesMappingWithDetails(gitDiff *git.GitDiff, filterFile func(file string) bool) (map[string]LineMapping, error) {
+func CollectUnchangedLinesMappingWithDetails(gitDiff *git.GitDiff, filterFile func(file string) bool) (map[string]LineMapping, map[string]DeletedLineMapping, error) {
 	fileDetails, err := gitDiff.AllFilesDetailsV2()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	mapping := make(map[model.PkgFile]LineMapping, len(fileDetails))
+	deleteMapping := make(map[model.PkgFile]DeletedLineMapping, len(fileDetails))
 	for file, fd := range fileDetails {
 		if filterFile != nil && !filterFile(file) {
 			continue
@@ -50,19 +52,21 @@ func CollectUnchangedLinesMappingWithDetails(gitDiff *git.GitDiff, filterFile fu
 		// get content
 		newContent, err := gitDiff.GetNewContent(file)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		oldContent, err := gitDiff.GetOldContent(oldFile)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		newLines := strings.Split(newContent, "\n")
 		oldLines := strings.Split(oldContent, "\n")
 
-		lineMapping := diff.ComputeBlockMapping(oldLines, newLines)
+		lineMapping, deletedLines := diff.ComputeBlockMapping(oldLines, newLines)
 
-		mapping[strings.TrimPrefix(file, "/")] = lineMapping
+		trimFile := strings.TrimPrefix(file, "/")
+		mapping[trimFile] = lineMapping
+		deleteMapping[trimFile] = deletedLines
 	}
-	return mapping, nil
+	return mapping, deleteMapping, nil
 }

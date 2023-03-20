@@ -2,6 +2,8 @@ package goja
 
 import (
 	"encoding/json"
+	"io/ioutil"
+	"strings"
 	"testing"
 	"time"
 
@@ -52,8 +54,8 @@ func TestGojaDiff(t *testing.T) {
 	t.Logf("res: %T %v", v, v)
 }
 
-// go test -run TestDiff -v ./diff/vscode/goja
-func TestDiff(t *testing.T) {
+// go test -run TestDiffLines -v ./diff/vscode/goja
+func TestDiffLines(t *testing.T) {
 	res, err := Diff(&vscode.Request{
 		OldLines: []string{"A", "B", "C"},
 		NewLines: []string{"A", "B2", "C"},
@@ -112,4 +114,30 @@ func BenchmarkDiff(b *testing.B) {
 			b.Fatalf("expect %s = %+v, actual:%+v", `resJSON`, resJSONExpect, resJSON)
 		}
 	}
+}
+func readLines(file string) []string {
+	content, err := ioutil.ReadFile(file)
+	if err != nil {
+		panic(err)
+	}
+	return strings.Split(string(content), "\n")
+}
+
+// go test -run TestDiffFile -v ./diff/vscode/goja
+func TestDiffFile(t *testing.T) {
+	oldFile := "../testdata/a_old_3.txt"
+	newFile := "../testdata/a_new_3.txt"
+
+	res, err := Diff(&vscode.Request{
+		OldLines: readLines(oldFile),
+		NewLines: readLines(newFile),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resJSON, err := json.Marshal(res)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("res: %+v", string(resJSON))
 }

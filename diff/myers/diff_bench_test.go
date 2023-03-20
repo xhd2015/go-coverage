@@ -11,7 +11,7 @@ import (
 func BenchmarkDiff(b *testing.B) {
 	// defer DestroyNow() // DON'T DO THIS, this will effectively close all thing
 	for i := 0; i < b.N; i++ {
-		res := ComputeBlockMapping(
+		res, _ := ComputeBlockMapping(
 			[]string{"A", "B", "C"},
 			[]string{"A", "B2", "C"},
 		)

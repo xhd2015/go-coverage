@@ -61,7 +61,7 @@ func TestBlockMappingV2(t *testing.T) {
 
 // go test -run TestBlockMapping -v ./diff/myers
 func testBlockMapping(t *testing.T, oldFile string, newFile string) {
-	m := ComputeBlockMapping(
+	m, _ := ComputeBlockMapping(
 		readLines(oldFile),
 		readLines(newFile),
 	)

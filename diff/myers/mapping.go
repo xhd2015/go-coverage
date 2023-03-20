@@ -32,15 +32,20 @@ func UseGojaDiff() {
 // counterpart in old, -1 if new.
 // the result is 0-based, which is a historical design.
 // we may optimize to 1-based in the future.xs
-func ComputeBlockMapping(oldBlocks []string, newBlocks []string) map[int]int {
+// NOTE: `newToOld` is 0-based, `deletedLines` is 1-based
+func ComputeBlockMapping(oldBlocks []string, newBlocks []string) (newToOld map[int]int, deletedLines map[int]bool) {
 	if useGojaDiff {
-		return ComputeBlockMappingUsingVscodeDiff(oldBlocks, newBlocks)
+		newToOld, deletedLines = ComputeBlockMappingUsingVscodeDiff(oldBlocks, newBlocks)
+		return
 	}
-	m := make(map[int]int, len(newBlocks))
+	if true {
+		panic(fmt.Errorf("ComputeBlockMapping only supports vscode"))
+	}
+	newToOld = make(map[int]int, len(newBlocks))
 	operationsComplex(oldBlocks, newBlocks, func(oldLine, newLine int) {
-		m[newLine] = oldLine
+		newToOld[newLine] = oldLine
 	}, nil)
-	return m
+	return
 }
 
 func ComputeBlockMappingV2(oldBlocks []string, newBlocks []string) (newToOld map[int]int) {
@@ -56,7 +61,7 @@ func ComputeBlockMappingV2(oldBlocks []string, newBlocks []string) (newToOld map
 	return
 }
 
-func ComputeBlockMappingUsingVscodeDiff(oldBlocks []string, newBlocks []string) (newToOld map[int]int) {
+func ComputeBlockMappingUsingVscodeDiff(oldBlocks []string, newBlocks []string) (newToOld map[int]int, deletedLines map[int]bool) {
 	res, err := goja.Diff(&vscode.Request{
 		OldLines: oldBlocks,
 		NewLines: newBlocks,
@@ -64,17 +69,23 @@ func ComputeBlockMappingUsingVscodeDiff(oldBlocks []string, newBlocks []string) 
 	if err != nil {
 		panic(fmt.Errorf("compute block error:%v", err))
 	}
-	m := make(map[int]int, len(newBlocks))
+	newToOld = make(map[int]int, len(newBlocks))
+	deletedLines = make(map[int]bool)
 	vscode.ForeachLineMapping(res.Changes, len(oldBlocks), len(newBlocks), func(oldLineStart, oldLineEnd, newLineStart, newLineEnd int, changeType vscode.ChangeType) {
 		if changeType == vscode.ChangeTypeUnchange {
 			for i, j := oldLineStart, newLineStart; i < oldLineEnd; i++ {
 				// NOTE: the mapping is from new line to old line
-				m[j-1] = i - 1
+				newToOld[j-1] = i - 1
 				j++
+			}
+		} else if changeType == vscode.ChangeTypeDelete {
+			for i := oldLineStart; i < oldLineEnd; i++ {
+				// NOTE: deleted line is 1-based
+				deletedLines[i] = true
 			}
 		}
 	})
-	return m
+	return
 }
 
 // TODO: currently not used, maybe the only important thing is finding sames, not updates or deletions.

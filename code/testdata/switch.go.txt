@@ -1,0 +1,19 @@
+package xyz
+
+
+func InitMap() {
+        loadCommon()
+        a := config.GetA()
+        switch a {
+        case constant.A:
+                loadAFeature()
+        case constant.B:
+                loadBFeature()
+        case constant.C:
+                loadCFeature()
+        case constant.D:
+                loadDFeature()
+        case constant.F:
+                loadFFeature()
+        }
+}
