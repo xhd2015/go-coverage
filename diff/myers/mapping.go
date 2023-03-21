@@ -62,16 +62,13 @@ func ComputeBlockMappingV2(oldBlocks []string, newBlocks []string) (newToOld map
 }
 
 func ComputeBlockMappingUsingVscodeDiff(oldBlocks []string, newBlocks []string) (newToOld map[int]int, deletedLines map[int]bool) {
-	res, err := goja.Diff(&vscode.Request{
-		OldLines: oldBlocks,
-		NewLines: newBlocks,
-	})
+	changes, err := DiffChanges(oldBlocks, newBlocks)
 	if err != nil {
 		panic(fmt.Errorf("compute block error:%v", err))
 	}
 	newToOld = make(map[int]int, len(newBlocks))
 	deletedLines = make(map[int]bool)
-	vscode.ForeachLineMapping(res.Changes, len(oldBlocks), len(newBlocks), func(oldLineStart, oldLineEnd, newLineStart, newLineEnd int, changeType vscode.ChangeType) {
+	vscode.ForeachLineMapping(changes, len(oldBlocks), len(newBlocks), func(oldLineStart, oldLineEnd, newLineStart, newLineEnd int, changeType vscode.ChangeType) {
 		if changeType == vscode.ChangeTypeUnchange {
 			for i, j := oldLineStart, newLineStart; i < oldLineEnd; i++ {
 				// NOTE: the mapping is from new line to old line
@@ -86,6 +83,17 @@ func ComputeBlockMappingUsingVscodeDiff(oldBlocks []string, newBlocks []string) 
 		}
 	})
 	return
+}
+
+func DiffChanges(oldBlocks []string, newBlocks []string) (changes []*vscode.LineChange, err error) {
+	res, err := goja.Diff(&vscode.Request{
+		OldLines: oldBlocks,
+		NewLines: newBlocks,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("compute block error:%v", err)
+	}
+	return res.Changes, nil
 }
 
 // TODO: currently not used, maybe the only important thing is finding sames, not updates or deletions.
