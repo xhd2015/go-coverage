@@ -62,7 +62,11 @@ func (c *StdProfile) Clone() Profile {
 
 // GetCounters implements Profile
 func (c *StdProfile) GetCounters(pkgFile string) Counters {
-	return c.counters[pkgFile]
+	counters := c.counters[pkgFile]
+	if counters == nil {
+		return nil
+	}
+	return counters
 }
 
 // RangeCounters implements Profile
