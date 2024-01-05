@@ -65,10 +65,15 @@ func DiffCommit(dir string, ref string, compareRef string, options *DiffCommitOp
 	var collectUntrackedFilesCmd string
 
 	var withTreeRef string
+	var workingFlags string
 	if ref != COMMIT_WORKING {
 		defRef = fmt.Sprintf("ref=$(git rev-parse --verify --quiet %s || true)", sh.Quote(ref))
 		withTreeRef = "--with-tree $ref"
 	} else {
+		// -c cached (default)
+		// -o others,including untracked
+		workingFlags = "--exclude-standard -co"
+
 		collectUntrackedFilesCmd = "git ls-files --no-empty-directory --exclude-standard --others  --full-name" + patternArg
 	}
 	res, err := RunCommand(dir, func(commands []string) []string {
@@ -77,7 +82,7 @@ func DiffCommit(dir string, ref string, compareRef string, options *DiffCommitOp
 			fmt.Sprintf("compareRef=$(git rev-parse --verify --quiet %s || true)", sh.Quote(compareRef)),
 			// all new files
 			"echo 'all-new-files:'",
-			fmt.Sprintf(`git ls-files %s %s`, withTreeRef, patternArg),
+			fmt.Sprintf(`git ls-files %s %s %s`, withTreeRef, workingFlags, patternArg),
 			"echo -ne '\r\r\r\r\r\r'",
 
 			// all old files
@@ -88,17 +93,17 @@ func DiffCommit(dir string, ref string, compareRef string, options *DiffCommitOp
 			// added files
 			"echo 'added-files:'",
 			fmt.Sprintf(`git diff --diff-filter=A --name-only --ignore-submodules "$compareRef" $ref -- %s|| true`, patternArg),
-			// untracked files if
 			"echo -ne '\r\r\r\r\r\r'",
 
-			// added files
+			// untracked files
 			"echo 'untracked-files:'",
 			collectUntrackedFilesCmd,
 			"echo -ne '\r\r\r\r\r\r'",
 
 			// modified files
+			// add -c core.fileMode=false to ignore mode change
 			"echo 'modified-files:'",
-			fmt.Sprintf(`git diff --diff-filter=M --name-only --ignore-submodules "$compareRef" $ref -- %s|| true`, patternArg),
+			fmt.Sprintf(`git -c core.fileMode=false diff --diff-filter=M --name-only --ignore-submodules "$compareRef" $ref -- %s|| true`, patternArg),
 			"echo -ne '\r\r\r\r\r\r'",
 
 			// // renamed files
@@ -170,6 +175,12 @@ func DiffCommit(dir string, ref string, compareRef string, options *DiffCommitOp
 			// deleted files has two type of changes:
 			// 1.deleted
 			// 2.renamed to another file
+			// an example:
+			//   HEAD:   ab.txt
+			// HEAD~1:   a.txt b.txt
+			// results:  ab.txt: renamedFrom=a.txt,contentChanged=true
+			//           a.txt:  deleted = true
+			//           b.txt:  deleted = true
 			fileDetailsMap[file] = &FileDetail{
 				Deleted: true, // it may be renmaed also
 			}
