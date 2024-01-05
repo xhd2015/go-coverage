@@ -26,6 +26,10 @@ func DiffCommit(dir string, ref string, compareRef string, options *DiffCommitOp
 		err = fmt.Errorf("requires compareRef")
 		return
 	}
+	if compareRef == COMMIT_WORKING {
+		err = fmt.Errorf("compareRef cannot be WORKING commit")
+		return
+	}
 
 	var patternArg string
 	if options != nil && len(options.PathPatterns) > 0 {
@@ -57,10 +61,15 @@ func DiffCommit(dir string, ref string, compareRef string, options *DiffCommitOp
 	// git diff --find-renames --diff-filter=R %s %s|grep -A 3 '^diff --git a/'|grep -E '^rename' || true
 
 	defRef := "ref="
+
+	var collectUntrackedFilesCmd string
+
 	var withTreeRef string
 	if ref != COMMIT_WORKING {
 		defRef = fmt.Sprintf("ref=$(git rev-parse --verify --quiet %s || true)", sh.Quote(ref))
 		withTreeRef = "--with-tree $ref"
+	} else {
+		collectUntrackedFilesCmd = "git ls-files --no-empty-directory --exclude-standard --others  --full-name" + patternArg
 	}
 	res, err := RunCommand(dir, func(commands []string) []string {
 		return append(commands, []string{
@@ -79,6 +88,12 @@ func DiffCommit(dir string, ref string, compareRef string, options *DiffCommitOp
 			// added files
 			"echo 'added-files:'",
 			fmt.Sprintf(`git diff --diff-filter=A --name-only --ignore-submodules "$compareRef" $ref -- %s|| true`, patternArg),
+			// untracked files if
+			"echo -ne '\r\r\r\r\r\r'",
+
+			// added files
+			"echo 'untracked-files:'",
+			collectUntrackedFilesCmd,
 			"echo -ne '\r\r\r\r\r\r'",
 
 			// modified files
@@ -103,6 +118,7 @@ func DiffCommit(dir string, ref string, compareRef string, options *DiffCommitOp
 	var allNewFiles []string
 	var allOldFiles []string
 	var addedFiles []string
+	var untrackedFiles []string
 	var modifiedFiles []string
 	// renamedFiles := make(map[string]string) // rename to -> rename from
 
@@ -122,6 +138,8 @@ func DiffCommit(dir string, ref string, compareRef string, options *DiffCommitOp
 			allOldFiles = splitLinesFilterEmpty(groupContent)
 		case "added-files":
 			addedFiles = splitLinesFilterEmpty(groupContent)
+		case "untracked-files":
+			untrackedFiles = splitLinesFilterEmpty(groupContent)
 		case "modified-files":
 			modifiedFiles = splitLinesFilterEmpty(groupContent)
 		case "renamed-files-with-summary":
@@ -157,9 +175,26 @@ func DiffCommit(dir string, ref string, compareRef string, options *DiffCommitOp
 			}
 		}
 	}
-	// for to, from := range renamedFiles {
-	// 	fileDetailsMap[to].RenamedFrom = from
-	// }
+	// add untracked files
+	for _, file := range untrackedFiles {
+		fd := fileDetailsMap[file]
+		if fd != nil {
+			if fd.Deleted {
+				// untracked file in allOld, mark as update
+				fd.Deleted = false
+				fd.ContentChanged = true
+				continue
+			}
+			// untracked file in allNewFiles
+			fd.IsNew = true
+			continue
+		}
+		// neither in allNew nor allOld, mark as new
+		fileDetailsMap[file] = &FileDetail{
+			IsNew: true,
+		}
+	}
+
 	for _, file := range addedFiles {
 		fileDetailsMap[file].IsNew = true
 	}

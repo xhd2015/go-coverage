@@ -141,3 +141,43 @@ func TestDiffFile(t *testing.T) {
 	}
 	t.Logf("res: %+v", string(resJSON))
 }
+
+// go test -run TestDiffContent -v ./diff/vscode/goja
+func TestDiffContent(t *testing.T) {
+	oldContent := `package main
+
+func calculateLateCharge(principal string) string {
+	lateChargeRate := GetConfig("late_charge_rate")
+	if lateChargeRate == "" {
+		return ZERO
+	}
+	return utils.Multiple(lateChargeRate, principal)
+}`
+
+	newContent := `package main
+
+func calculateLateChargeV2(principal string) string {
+	lateChargeRate := GetConfig("late_charge_rate_v2")
+	deductRate := GetConfig("deduct_rate")
+	if lateChargeRate == "" {
+		log.Errorf("missing config late_charge_rate")
+		return ZERO
+	}
+	if deductRate != ""{
+		lateChargeRate = utils.Multiple(lateChargeRate, deductRate)
+	}
+	return utils.Multiple(lateChargeRate, principal)
+}`
+	res, err := Diff(&vscode.Request{
+		OldLines: strings.Split(oldContent, "\n"),
+		NewLines: strings.Split(newContent, "\n"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resJSON, err := json.Marshal(res)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("res: %+v", string(resJSON))
+}
