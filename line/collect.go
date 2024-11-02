@@ -94,21 +94,13 @@ func CollectChanges(forChangedFiles func(fn func(file string, oldFile string, ne
 	var err error
 	changesMapping := make(model.FileChanges)
 	forErr := forChangedFiles(func(file string, oldFile string, newContent string, oldContent string) bool {
-		newLines := strings.Split(newContent, "\n")
-		oldLines := strings.Split(oldContent, "\n")
-
-		changes, diffErr := diff.DiffChanges(oldLines, newLines)
+		changes, diffErr := Diff(newContent, oldContent)
 		if diffErr != nil {
-			err = fmt.Errorf("diff changes of file %v: %v", file, diffErr)
+			err = fmt.Errorf("%s: %w", file, diffErr)
 			return false
 		}
 
-		trimFile := strings.TrimPrefix(file, "/")
-		changesMapping[trimFile] = &model.LineChanges{
-			NewLineCount: int64(len(newLines)),
-			OldLineCount: int64(len(oldLines)),
-			Changes:      changes,
-		}
+		changesMapping[strings.TrimPrefix(file, "/")] = changes
 		return true
 	})
 	if forErr != nil {
@@ -118,4 +110,20 @@ func CollectChanges(forChangedFiles func(fn func(file string, oldFile string, ne
 		return nil, err
 	}
 	return changesMapping, nil
+}
+
+func Diff(newContent string, oldContent string) (*model.LineChanges, error) {
+	newLines := strings.Split(newContent, "\n")
+	oldLines := strings.Split(oldContent, "\n")
+
+	changes, err := diff.DiffChanges(oldLines, newLines)
+	if err != nil {
+		return nil, fmt.Errorf("diff changes of: %w", err)
+	}
+
+	return &model.LineChanges{
+		NewLineCount: int64(len(newLines)),
+		OldLineCount: int64(len(oldLines)),
+		Changes:      changes,
+	}, nil
 }
