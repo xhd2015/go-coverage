@@ -1,9 +1,9 @@
 # GitSnapshot.GetContent — blob content contract
 
 Contract tests for `(*GitSnapshot).GetContent` reading committed file bodies from a
-local git fixture (no network). Semantics are locked for the hardened
-**direct `git cat-file`** path (implementer removes `bash -c`); content leaves may
-already be GREEN on the current bash-based implementation.
+local git fixture (no network). Semantics cover the hardened **direct `git cat-file`**
+path and Phase 1 **bare/common-dir** resolution when `Dir` is a linked worktree
+(including after the linked admin gitdir is deleted).
 
 ## Version
 
@@ -13,17 +13,20 @@ already be GREEN on the current bash-based implementation.
 
 **Participants**
 
-- **caller** — builds `GitSnapshot{Dir, Commit}` after a local `git init` + commit
-  fixture and asks for blob text of a tracked path.
-- **GitSnapshot** — snapshot of one commit in a work-tree directory; caches
-  `ls-files` membership for path checks.
+- **caller** — builds `GitSnapshot{Dir, Commit}` after a local fixture and asks for
+  blob text of a tracked path.
+- **GitSnapshot** — snapshot of one commit; `Dir` is a checkout path (normal repo or
+  linked detached worktree); caches `ls-files` membership for path checks.
 - **GetContent(file)** — returns the committed blob body for a tracked file path
   (normalized by trimming a leading `./`), or a clear error when the path is not
-  a file in the snapshot list.
+  a file in the snapshot list. Desired object read: resolve git common dir (bare)
+  once from `Dir`, then `git --git-dir=<bare> cat-file -p <sha>:<path>`.
 - **ListFiles** — lists tracked paths at the snapshot commit; used by concurrent
-  leaves to warm the file map before fan-out.
-- **local git fixture** — temp repo with known files and a recorded commit SHA
-  (L2 only; no remotes).
+  leaves to warm the file map before fan-out (same git-dir resolution as GetContent).
+- **local git fixture** — temp normal repo or bare + linked detached worktree with
+  known files and a recorded commit SHA (L2 only; no remotes / network).
+- **linked admin gitdir** — `bare/worktrees/<id>` pointed to by checkout `.git`
+  (`gitdir: …`); Phase 1 contract must not require this admin dir to still exist.
 
 **Behaviors**
 
@@ -36,35 +39,46 @@ already be GREEN on the current bash-based implementation.
 - After `ListFiles`, many concurrent `GetContent` calls on the same snapshot
   succeed with correct bodies (regression guard for ECHILD / process wait issues
   under load; does not require process inspection).
+- Linked detached worktree with admin intact → GetContent returns committed body.
+- Linked detached worktree after **admin gitdir only** is deleted → GetContent still
+  returns the same body via bare/common-dir (must **not** fail with
+  `not a git repository`).
 
 ## Decision Tree
 
-Most significant factor is **path / content outcome** of a single `GetContent`
-call; concurrent multi-call is a separate access-pattern leaf on the same fixture.
+Primary split for historical leaves is **path / content outcome** on a normal
+checkout; Phase 1 adds **git layout / admin state** leaves on the same content
+contract (`hello.go`).
 
 ```
 get-content/   (GitSnapshot.GetContent @ committed SHA)
-├── existing-file-content/       # hello.go → committed body
-├── empty-file-ok/               # empty.go → "" , err=nil
-├── missing-file-error/          # path not in ls-files → error
-├── special-path-chars/          # path with spaces / a-b → content
-└── concurrent-many-getcontent/  # N goroutines GetContent, all correct
+├── existing-file-content/              # normal checkout: hello.go → body
+├── empty-file-ok/                      # empty.go → "" , err=nil
+├── missing-file-error/                 # path not in ls-files → error
+├── special-path-chars/                 # path with spaces → content
+├── concurrent-many-getcontent/         # N goroutines GetContent, all correct
+├── linked-worktree-getcontent-ok/      # linked detached wt, admin intact → body
+└── admin-deleted-getcontent-still-ok/  # admin gitdir gone → still body (Classic RED)
 ```
 
 ### Parameter significance (high → low)
 
-1. **Path outcome** — exists (non-empty / empty / special chars) vs missing.
-2. **Access pattern** — single call vs concurrent many calls on one snapshot.
+1. **Git layout / admin state** — normal checkout vs linked worktree (admin
+   intact vs admin deleted); only the deleted-admin case is the Phase 1 RED driver.
+2. **Path outcome** — exists (non-empty / empty / special chars) vs missing.
+3. **Access pattern** — single call vs concurrent many calls on one snapshot.
 
 ## Test Case Index
 
 | # | Path | Preconditions | Expected |
 |---|------|---------------|----------|
-| 1 | `existing-file-content/` | Fixture commit includes `hello.go` with known body | `Content` equals body; err nil |
+| 1 | `existing-file-content/` | Normal fixture commit includes `hello.go` | `Content` equals body; err nil |
 | 2 | `empty-file-ok/` | Fixture includes empty `empty.go` | `Content == ""`; err nil |
 | 3 | `missing-file-error/` | Path not tracked in commit | err non-nil; message contains `not a file, maybe a dir` |
 | 4 | `special-path-chars/` | `path with spaces/file.go` tracked | Content equals committed body; err nil |
 | 5 | `concurrent-many-getcontent/` | ListFiles warmed; 30 concurrent GetContent over 3 files | All hits err-free; content matches expected map |
+| 6 | `linked-worktree-getcontent-ok/` | Bare + detached linked worktree; admin gitdir intact | GetContent(`hello.go`) body; err nil |
+| 7 | `admin-deleted-getcontent-still-ok/` | Same as #6, then delete only linked admin under bare/worktrees | Same body; err nil; not `not a git repository` |
 
 ## How to Run
 
