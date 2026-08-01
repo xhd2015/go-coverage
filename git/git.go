@@ -1,11 +1,15 @@
 package git
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"io/ioutil"
+	"os/exec"
 	"path"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/xhd2015/go-coverage/sh"
 )
@@ -249,12 +253,68 @@ func (c *GitSnapshot) GetContent(file string) (string, error) {
 		return string(content), nil
 	}
 
-	content, _, err := sh.RunBashWithOpts([]string{
-		fmt.Sprintf("git -C %s cat-file -p %s:%s", sh.Quote(c.Dir), sh.Quote(c.ref()), sh.Quote(normFile)),
-	}, sh.RunBashOptions{
-		NeedStdOut: true,
-	})
+	// Direct argv (no bash): git cat-file -p ref:file with Cmd.Dir.
+	content, err := c.runGitCatFile(normFile)
+	if err == nil {
+		return content, nil
+	}
+	// ECHILD harden: Wait can fail with "no child processes" after the child
+	// already wrote stdout. Prefer content when we have it; otherwise retry once.
+	if isNoChildProcessErr(err) {
+		if content != "" {
+			return content, nil
+		}
+		content, err = c.runGitCatFile(normFile)
+		if err == nil {
+			return content, nil
+		}
+		if isNoChildProcessErr(err) && content != "" {
+			return content, nil
+		}
+	}
 	return content, err
+}
+
+// runGitCatFile runs `git cat-file -p ref:file` without a shell.
+// On error it still returns any stdout collected (needed for ECHILD harden).
+func (c *GitSnapshot) runGitCatFile(normFile string) (string, error) {
+	cmd := exec.Command("git", "cat-file", "-p", c.ref()+":"+normFile)
+	cmd.Dir = c.Dir
+	var stdoutBuf, stderrBuf bytes.Buffer
+	cmd.Stdout = &stdoutBuf
+	cmd.Stderr = &stderrBuf
+	err := cmd.Run()
+	content := stdoutBuf.String()
+	if err != nil {
+		if isNoChildProcessErr(err) {
+			// Surface raw wait error so caller can harden; keep collected stdout.
+			return content, err
+		}
+		stderr := strings.TrimSpace(stderrBuf.String())
+		if stderr != "" {
+			return content, fmt.Errorf("git cat-file -p %s:%s: %v stderr:%s", c.ref(), normFile, err, stderr)
+		}
+		return content, fmt.Errorf("git cat-file -p %s:%s: %v", c.ref(), normFile, err)
+	}
+	return content, nil
+}
+
+// isNoChildProcessErr reports wait/ECHILD failures seen under concurrent exec.
+func isNoChildProcessErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, syscall.ECHILD) {
+		return true
+	}
+	var errno syscall.Errno
+	if errors.As(err, &errno) && errno == syscall.ECHILD {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "no child processes") ||
+		strings.Contains(msg, "wait: no child processes") ||
+		strings.Contains(msg, "waitid: no child processes")
 }
 func (c *GitSnapshot) ListFiles() ([]string, error) {
 	c.ensureInitList()
