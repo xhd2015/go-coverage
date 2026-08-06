@@ -60,11 +60,21 @@ jobs:
             | env INSTALL_TO_BIN=true bash
           xgo version
 
+      - name: Install kool (coverage package-table)
+        # Released CLI: kool go coverage package-table (v0.0.136+).
+        run: |
+          curl -fsSL https://github.com/xhd2015/kool/raw/master/install.sh | bash
+          export PATH="$HOME/go/bin:$HOME/bin:$PATH"
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+          kool version
+
       - name: Merge coverage and report
         # Merge only profiles that exist (partial success still reports).
         # xgo tool coverage merge — do not reuse one -coverprofile path across stages.
         run: |
           set -euo pipefail
+          export PATH="$HOME/go/bin:$HOME/bin:$PATH"
           profiles=()
           for f in coverage-gotest.out coverage-doctest-discovery.out coverage-doctest-e2e.out; do
             if [[ -s "$f" ]]; then
@@ -91,7 +101,7 @@ jobs:
             echo ""
             echo "### Package breakdown (product, lowest first)"
             echo ""
-            python3 script/ci/coverage-package-table.py coverage.out
+            kool go coverage package-table coverage.out
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload coverage artifacts
