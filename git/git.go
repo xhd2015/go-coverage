@@ -65,6 +65,15 @@ func FindAll(dir string, oldCommit string, newCommit string) (allFiles []string,
 
 type GitRepo struct {
 	Dir string
+	// PathPatterns are optional git pathspecs appended after `--` (e.g. "*.go", ":(exclude)vendor").
+	PathPatterns []string
+}
+
+func (c *GitRepo) pathSpecArg() string {
+	if c == nil || len(c.PathPatterns) == 0 {
+		return ""
+	}
+	return " -- " + sh.Quotes(c.PathPatterns...)
 }
 
 func NewGitRepo(dir string) *GitRepo {
@@ -87,7 +96,7 @@ func QuoteCommit(commit string) string {
 }
 
 func (c *GitRepo) FindUpdate(oldCommit string, newCommit string) ([]string, error) {
-	cmd := fmt.Sprintf(`git -C %s diff --diff-filter=M --name-only --ignore-submodules %s %s`, sh.Quote(c.Dir), QuoteCommit(oldCommit), QuoteCommit(newCommit))
+	cmd := fmt.Sprintf(`git -C %s diff --diff-filter=M --name-only --ignore-submodules %s %s%s`, sh.Quote(c.Dir), QuoteCommit(oldCommit), QuoteCommit(newCommit), c.pathSpecArg())
 	stdout, _, err := sh.RunBashCmdOpts(cmd, sh.RunBashOptions{
 		NeedStdOut: true,
 	})
@@ -97,7 +106,7 @@ func (c *GitRepo) FindUpdate(oldCommit string, newCommit string) ([]string, erro
 	return splitLinesFilterEmpty(stdout), nil
 }
 func (c *GitRepo) FindAdded(oldCommit string, newCommit string) ([]string, error) {
-	cmd := fmt.Sprintf(`git -C %s diff --diff-filter=A --name-only --ignore-submodules %s %s`, sh.Quote(c.Dir), QuoteCommit(oldCommit), QuoteCommit(newCommit))
+	cmd := fmt.Sprintf(`git -C %s diff --diff-filter=A --name-only --ignore-submodules %s %s%s`, sh.Quote(c.Dir), QuoteCommit(oldCommit), QuoteCommit(newCommit), c.pathSpecArg())
 	stdout, _, err := sh.RunBashCmdOpts(cmd, sh.RunBashOptions{
 		NeedStdOut: true,
 	})
@@ -117,7 +126,7 @@ func (c *GitRepo) FindRenames(oldCommit string, newCommit string) (map[string]st
 	// --- a/test/stubv2/boot/boot.go
 	// +++ b/test/stub/boot/boot.go
 	// @@ -4,8 +4,10 @@ import (
-	cmd := fmt.Sprintf(`git -C %s diff --find-renames --diff-filter=R --ignore-submodules %s %s|grep -A 3 '^diff --git a/'|grep -E '^rename' || true`, sh.Quote(c.Dir), QuoteCommit(oldCommit), QuoteCommit(newCommit))
+	cmd := fmt.Sprintf(`git -C %s diff --find-renames --diff-filter=R --ignore-submodules %s %s%s|grep -A 3 '^diff --git a/'|grep -E '^rename' || true`, sh.Quote(c.Dir), QuoteCommit(oldCommit), QuoteCommit(newCommit), c.pathSpecArg())
 	stdout, stderr, err := sh.RunBashCmdOpts(cmd, sh.RunBashOptions{
 		// Verbose:    true,
 		NeedStdOut: true,
@@ -145,7 +154,7 @@ func (c *GitRepo) FindRenames(oldCommit string, newCommit string) (map[string]st
 
 // without --ignore-submodules, git diff may include diff of dirs
 func (c *GitRepo) FindRenamesV2(oldCommit string, newCommit string, fn func(newFile string, oldFile string, percent string)) error {
-	cmd := fmt.Sprintf(`git -C %s diff --diff-filter=R --summary --ignore-submodules %s %s || true`, sh.Quote(c.Dir), QuoteCommit(oldCommit), QuoteCommit(newCommit))
+	cmd := fmt.Sprintf(`git -C %s diff --diff-filter=R --summary --ignore-submodules %s %s%s || true`, sh.Quote(c.Dir), QuoteCommit(oldCommit), QuoteCommit(newCommit), c.pathSpecArg())
 	stdout, stderr, err := sh.RunBashCmdOpts(cmd, sh.RunBashOptions{
 		// Verbose:    true,
 		NeedStdOut: true,
