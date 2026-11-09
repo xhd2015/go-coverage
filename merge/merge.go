@@ -1,11 +1,12 @@
 package merge
 
 import (
+	"encoding/json"
 	"fmt"
+	"os/exec"
 	"strings"
 
 	"github.com/xhd2015/go-coverage/git"
-	"github.com/xhd2015/go-coverage/sh"
 )
 
 func MergeGit(old Profile, new Profile, modPrefix string, dir string, oldCommit string, newCommit string) (Profile, error) {
@@ -77,7 +78,8 @@ type MergeOptions struct {
 
 // Merge merge 2 profiles with their code diffs
 // for files there are 2 independent conditions:
-//  1.name changed  2.content changed
+//
+//	1.name changed  2.content changed
 func Merge(old Profile, oldCodeGetter func(f string) (string, error), newProfile Profile, newCodeGetter func(f string) (string, error), opts MergeOptions) (Profile, error) {
 	var err error
 	res := newProfile.Clone()
@@ -174,18 +176,26 @@ func MergeFileNameCounters(oldCounter Counters, oldFileName string, oldCode stri
 }
 
 func GetModPath(dir string) (modPath string, err error) {
+	if dir == "" {
+		return "", fmt.Errorf("get module path: requires dir")
+	}
 	// try to read mod from dir
 	var mod struct {
 		Module struct {
 			Path string
 		}
 	}
-	_, _, err = sh.RunBashCmdOpts(fmt.Sprintf(`cd %s && go mod edit -json`, sh.Quote(dir)), sh.RunBashOptions{
-		StdoutToJSON: &mod,
-	})
+	cmd := exec.Command("go", "mod", "edit", "-json")
+	cmd.Dir = dir
+	out, err := cmd.Output()
 	if err != nil {
-		err = fmt.Errorf("get module path: %v", err)
-		return
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return "", fmt.Errorf("get module path: %w: %s", err, strings.TrimSpace(string(exitErr.Stderr)))
+		}
+		return "", fmt.Errorf("get module path: %w", err)
+	}
+	if err := json.Unmarshal(out, &mod); err != nil {
+		return "", fmt.Errorf("get module path: %w", err)
 	}
 	modPath = mod.Module.Path
 	return

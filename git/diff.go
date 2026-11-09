@@ -210,10 +210,18 @@ func (c *GitDiff) GetOldContentNewFile(newFile string) (string, error) {
 }
 
 func (c *GitDiff) GetOldFile(newFile string) (oldFile string, ok bool, err error) {
-	newToOld, err := c.GetUpdateAndRenames()
+	// The line-change ranger reaches this method after AllFilesDetailsV2. Reuse
+	// that verified argv-only result instead of re-entering legacy shell diffs.
+	details, err := c.AllFilesDetailsV2()
 	if err != nil {
 		return "", false, err
 	}
-	oldFile, ok = newToOld[newFile]
-	return
+	detail := details[newFile]
+	if detail == nil || detail.IsNew || detail.Deleted || (!detail.ContentChanged && detail.RenamedFrom == "") {
+		return "", false, nil
+	}
+	if detail.RenamedFrom != "" {
+		return detail.RenamedFrom, true, nil
+	}
+	return newFile, true, nil
 }
